@@ -1,0 +1,7 @@
+**/node_modules
+**/dist
+.data
+.env
+.git
+# The marketing site deploys separately (Vercel); the app image never needs it.
+apps/site

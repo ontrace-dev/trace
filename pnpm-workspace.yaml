@@ -1,0 +1,49 @@
+packages:
+  - apps/*
+  - packages/*
+  - tools/*
+allowBuilds:
+  esbuild: true
+  onnxruntime-node: true
+  protobufjs: true
+  sharp: true
+
+catalog:
+  "@better-auth/core": 1.7.7
+  "@better-auth/passkey": 1.7.7
+  "@better-auth/sso": 1.7.7
+  "@modelcontextprotocol/sdk": ^1.32.1
+  "@types/node": ^24
+  discord.js: ^14.27.0
+  typescript: ^7.0.2
+  uqr: 0.1.3
+  vite: npm:@voidzero-dev/vite-plus-core@1.1.0
+  vite-plus: 1.1.0
+
+catalogMode: prefer
+minimumReleaseAgeExclude:
+  - "@voidzero-dev/vite-plus-core@1.1.0"
+  - "@voidzero-dev/vite-plus-darwin-arm64@1.1.0"
+  - "@voidzero-dev/vite-plus-darwin-x64@1.1.0"
+  - "@voidzero-dev/vite-plus-linux-arm64-gnu@1.1.0"
+  - "@voidzero-dev/vite-plus-linux-arm64-musl@1.1.0"
+  - "@voidzero-dev/vite-plus-linux-x64-gnu@1.1.0"
+  - "@voidzero-dev/vite-plus-linux-x64-musl@1.1.0"
+  - "@voidzero-dev/vite-plus-win32-arm64-msvc@1.1.0"
+  - "@voidzero-dev/vite-plus-win32-x64-msvc@1.1.0"
+  - vite-plus@1.1.0
+  - "@anthropic-ai/sdk@0.132.0"
+  - nodemailer@10.0.16
+# pnpm 10 name for the same allow-list (allowBuilds is pnpm 11+).
+onlyBuiltDependencies:
+  - esbuild
+  - onnxruntime-node
+  - protobufjs
+  - sharp
+overrides:
+  vite@*: "catalog:"
+peerDependencyRules:
+  allowAny:
+    - vite
+  allowedVersions:
+    vite: "*"

@@ -1,0 +1,914 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>trace: the open source, AI-native helpdesk</title>
+    <meta
+      name="description"
+      content="Email, chat, Slack and your own systems land in one inbox. An AI agent triages, researches and answers from your knowledge base. Every decision it makes is recorded as a trace you can audit."
+    />
+    <link rel="canonical" href="https://ontrace.dev/" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="theme-color" content="#0e0e11" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://ontrace.dev/" />
+    <meta property="og:title" content="trace: the helpdesk that shows its work" />
+    <meta
+      property="og:description"
+      content="Open source, AI-native support. Every answer comes with a trace you can audit, span by span."
+    />
+    <!-- Dark from the first paint: no white flash while the stylesheet loads. -->
+    <style>
+      html {
+        background: #0e0e11;
+        color-scheme: dark;
+      }
+    </style>
+    <!-- Linked, not imported from main.ts, so it blocks render in dev too (no unstyled first frame). -->
+    <link rel="stylesheet" href="/src/styles.css" />
+    <script type="module" src="/src/main.ts"></script>
+  </head>
+  <body class="relative overflow-x-hidden">
+    <!-- Column spines: hairlines on the content edges, the full length of the page. -->
+    <div
+      aria-hidden="true"
+      class="pointer-events-none absolute top-14 bottom-0 left-1/2 z-10 hidden w-[1120px] -translate-x-1/2 border-x border-line-2 xl:block"
+    ></div>
+
+    <header class="flex h-14 items-center justify-between border-b border-line px-4 md:px-6">
+      <a href="/" class="flex items-center gap-3" aria-label="trace home">
+        <span class="relative size-4 shrink-0 bg-fg">
+          <span class="absolute top-[7px] left-0 h-0.5 w-4 bg-ink"></span>
+          <span class="absolute top-0 left-[9px] h-[7px] w-0.5 bg-ink"></span>
+        </span>
+        <span class="font-mono text-[13px] font-semibold tracking-[1.6px] text-fg">TRACE.</span>
+      </a>
+      <nav class="hidden items-center gap-7 text-[13px] text-muted lg:flex">
+        <a href="#capabilities" class="hover:text-fg">Product</a>
+        <a href="#receipt" class="hover:text-fg">How it works</a>
+        <a href="#self-host" class="hover:text-fg">Self-host</a>
+        <a href="https://github.com/ontrace-dev/trace#readme" class="hover:text-fg">Docs</a>
+        <a href="https://github.com/ontrace-dev/trace/releases" class="hover:text-fg">Changelog</a>
+      </nav>
+      <div class="flex items-center gap-2">
+        <a
+          href="https://github.com/ontrace-dev/trace"
+          class="hidden h-8 items-center gap-2 px-3 text-fg-3 hover:text-fg sm:flex"
+          aria-label="trace on GitHub"
+        >
+          <i data-icon="github" class="size-3.5"></i>
+          <span data-stars hidden class="font-mono text-[11px] tracking-[0.4px]"></span>
+        </a>
+        <a
+          href="https://app.ontrace.dev/login"
+          class="hidden h-8 items-center px-3.5 text-[13px] text-muted hover:text-fg sm:flex"
+          >Sign in</a
+        >
+        <a
+          href="https://app.ontrace.dev/login"
+          class="flex h-8 items-center gap-1.5 bg-fg px-3.5 text-[13px] font-medium text-ink hover:bg-white"
+        >
+          Enter the demo <i data-icon="arrow-right" class="size-3.5"></i>
+        </a>
+      </div>
+    </header>
+
+    <main>
+      <!-- Hero -->
+      <section
+        class="relative flex flex-col justify-center overflow-hidden border-b border-line py-16 lg:min-h-[640px] lg:py-0"
+      >
+        <div class="trace-field" aria-hidden="true"></div>
+        <div class="wrap relative">
+          <div class="flex flex-col gap-12 md:px-12 lg:flex-row lg:items-end lg:justify-between">
+            <div class="flex max-w-[600px] flex-col gap-6">
+              <div class="flex items-center gap-2.5">
+                <span class="size-1.5 bg-ok"></span>
+                <span class="label text-muted">OPEN SOURCE HELPDESK · MIT · v0.1</span>
+              </div>
+              <h1
+                class="text-[38px]/[42px] font-semibold tracking-[-1.4px] text-fg md:text-[52px]/[54px] md:tracking-[-1.8px]"
+              >
+                The helpdesk that resolves the ticket and shows you exactly how.
+              </h1>
+              <p class="max-w-[520px] text-base/[26px] text-fg-3">
+                Email, chat, Slack and your own systems land in one inbox. An AI agent triages, researches and answers
+                from your knowledge base. Every decision it makes is recorded as a trace you can audit, span by
+                span.
+              </p>
+              <div class="flex flex-wrap items-center gap-2.5 pt-2">
+                <a
+                  href="https://app.ontrace.dev/login"
+                  class="flex h-10 items-center gap-2 bg-fg px-[18px] text-sm font-medium text-ink hover:bg-white"
+                >
+                  Enter the demo <i data-icon="arrow-right" class="size-[15px]"></i>
+                </a>
+                <a
+                  href="#self-host"
+                  class="flex h-10 items-center gap-2 bg-white/4 px-[18px] text-sm font-medium text-fg hover:bg-white/8"
+                >
+                  <i data-icon="terminal" class="size-[15px]"></i> Self-host it
+                </a>
+                <span class="font-mono text-[11.5px] tracking-[0.2px] text-faint">demo@trace.dev / password</span>
+              </div>
+            </div>
+
+            <div class="flex w-full flex-col gap-4 bg-bg/90 p-6 backdrop-blur-[6px] lg:w-[400px] lg:shrink-0">
+              <div class="flex items-center justify-between gap-4">
+                <span class="label text-muted">TRY IT · NO SIGN-UP</span>
+                <span data-reset class="font-mono text-[11px] tracking-[0.2px] text-faint">resets daily</span>
+              </div>
+              <div class="flex items-center gap-3 bg-accent/5 py-2.5 pr-2.5 pl-3.5">
+                <div class="flex flex-1 flex-col gap-0.5">
+                  <span class="text-[12.5px] font-medium text-fg">Try the shared demo</span>
+                  <span class="font-mono text-[11px] text-muted">sample data · resets daily</span>
+                </div>
+                <a
+                  href="https://app.ontrace.dev/login"
+                  class="flex h-[30px] shrink-0 items-center gap-1.5 bg-fg px-3 text-[12.5px] font-medium text-ink hover:bg-white"
+                >
+                  Enter the demo <i data-icon="arrow-right" class="size-[13px]"></i>
+                </a>
+              </div>
+              <div class="flex items-center gap-2.5">
+                <span class="h-px flex-1 bg-line"></span>
+                <span class="font-mono text-[11px] text-faint">or run it yourself</span>
+                <span class="h-px flex-1 bg-line"></span>
+              </div>
+              <div class="flex flex-col gap-2 overflow-x-auto bg-input px-3.5 py-3 font-mono text-xs whitespace-nowrap">
+                <div class="flex gap-2.5">
+                  <span class="text-faint">$</span
+                  ><span class="text-fg-2">git clone github.com/ontrace-dev/trace</span>
+                </div>
+                <div class="flex gap-2.5">
+                  <span class="text-faint">$</span><span class="text-fg-2">docker compose --profile app up</span>
+                </div>
+                <div class="flex gap-2.5">
+                  <span class="text-faint">→</span><span class="text-ok">http://localhost:3000 · demo data seeded</span>
+                </div>
+              </div>
+              <div class="flex gap-2 text-[12.5px] text-fg-3">
+                <span class="flex h-[34px] flex-1 items-center justify-center gap-[7px] bg-white/4">
+                  <i data-icon="key-round" class="size-[13px]"></i> SSO
+                </span>
+                <span class="flex h-[34px] flex-1 items-center justify-center gap-[7px] bg-white/4">
+                  <i data-icon="scan-face" class="size-[13px]"></i> Passkeys
+                </span>
+                <span class="flex h-[34px] flex-1 items-center justify-center gap-[7px] bg-white/4">
+                  <i data-icon="shield-check" class="size-[13px]"></i> 2FA
+                </span>
+              </div>
+              <p class="font-mono text-[11.5px]/[17px] text-faint">
+                Built-in auth. Bring Google, GitHub, Microsoft or your SAML IdP.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Facts strip -->
+      <section class="border-b border-line">
+        <dl class="wrap grid grid-cols-2 lg:grid-cols-4">
+          <div class="flex flex-col gap-2 border-l border-line px-6 py-[22px] max-lg:border-b">
+            <dt class="label text-faint">AGENT</dt>
+            <dd class="text-[13.5px]/5 text-fg-2">Claude, or offline heuristics without a key</dd>
+          </div>
+          <div class="flex flex-col gap-2 border-l border-line px-6 py-[22px] max-lg:border-r max-lg:border-b">
+            <dt class="label text-faint">KNOWLEDGE</dt>
+            <dd class="text-[13.5px]/5 text-fg-2">Docs, Confluence, Jira, Notion, Zendesk HC</dd>
+          </div>
+          <div class="flex flex-col gap-2 border-l border-line px-6 py-[22px]">
+            <dt class="label text-faint">CHANNELS</dt>
+            <dd class="text-[13.5px]/5 text-fg-2">Email, chat widget, Slack, Discord, REST</dd>
+          </div>
+          <div class="flex flex-col gap-2 border-x border-line px-6 py-[22px]">
+            <dt class="label text-faint">RUNS ON</dt>
+            <dd class="text-[13.5px]/5 text-fg-2">Postgres + pgvector. One docker compose.</dd>
+          </div>
+        </dl>
+      </section>
+
+      <!-- 01 The receipt -->
+      <section id="receipt" class="scroll-mt-4 border-b border-line py-16 md:py-24">
+        <div class="wrap flex flex-col gap-12">
+          <div class="flex flex-col gap-4 lg:flex-row lg:gap-0">
+            <div class="flex flex-col gap-1.5 lg:w-[280px] lg:shrink-0">
+              <span class="label text-accent-text">01</span>
+              <span class="label text-faint">THE RECEIPT</span>
+            </div>
+            <div class="flex flex-col gap-3.5">
+              <h2 class="max-w-[640px] text-[28px]/[32px] font-semibold tracking-[-1px] text-fg md:text-[34px]/[37px]">
+                Every answer comes with a receipt.
+              </h2>
+              <p class="max-w-[600px] text-[15.5px]/[25px] text-muted">
+                Open any ticket and see what the agent read, which tools it called, what it was allowed to do and why it
+                sent what it sent. Not a summary. The actual spans, with timings and attributes.
+              </p>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto bg-panel">
+            <div class="min-w-[900px] font-mono">
+              <div class="flex items-center gap-3.5 border-b border-line px-5 py-4">
+                <span class="text-[13px] tracking-[0.2px] text-fg">trace/8f21c40a</span>
+                <span class="font-sans text-[13px] text-fg-3">#4821 · “Charged twice for my March invoice”</span>
+                <span class="flex-1"></span>
+                <span class="text-[11px] tracking-[0.2px] text-muted">10 spans · 3 model calls · 4.8s</span>
+                <span class="flex items-center gap-1.5 bg-ok/4 px-2 py-1 text-ok">
+                  <i data-icon="circle-check" class="size-3"></i>
+                  <span class="text-[10.5px] tracking-[1.2px]">RESOLVED</span>
+                </span>
+              </div>
+              <div class="flex gap-4 border-b border-line-2 px-5 py-2.5 text-[11px] text-faint">
+                <span class="w-[220px] shrink-0 tracking-[1.2px]">SPAN</span>
+                <span class="flex flex-1 justify-between pr-4"><span>0ms</span><span>2.4s</span><span>4.8s</span></span>
+                <span class="w-[300px] shrink-0 tracking-[1.2px]">RESULT</span>
+                <span class="w-14 shrink-0 text-right tracking-[1.2px]">TIME</span>
+              </div>
+              <ol class="text-[11.5px]">
+                <li class="flex items-center gap-4 border-b border-line-2 px-5 py-[9px]">
+                  <span class="flex w-[220px] shrink-0 gap-2 text-fg-3">ticket.received</span>
+                  <span class="relative mr-4 h-1.5 flex-1"
+                    ><span class="absolute inset-y-0 left-0 w-[1%] bg-white/30"></span
+                  ></span>
+                  <span class="w-[300px] shrink-0 text-muted">email · de · from anna@kunde.de</span>
+                  <span class="w-14 shrink-0 text-right text-faint">0ms</span>
+                </li>
+                <li class="flex items-center gap-4 border-b border-line-2 px-5 py-[9px]">
+                  <span class="flex w-[220px] shrink-0 gap-2"
+                    ><span class="text-faint">│</span><span class="text-fg-3">triage</span></span
+                  >
+                  <span class="relative mr-4 h-1.5 flex-1"
+                    ><span class="absolute inset-y-0 left-[1%] w-[9%] bg-accent"></span
+                  ></span>
+                  <span class="w-[300px] shrink-0 text-muted">intent=billing.refund · priority=high</span>
+                  <span class="w-14 shrink-0 text-right text-accent-text">412ms</span>
+                </li>
+                <li class="flex items-center gap-4 border-b border-line-2 px-5 py-[9px]">
+                  <span class="flex w-[220px] shrink-0 gap-2"
+                    ><span class="text-faint">│</span><span class="text-fg-3">knowledge.search</span></span
+                  >
+                  <span class="relative mr-4 h-1.5 flex-1"
+                    ><span class="absolute inset-y-0 left-[10%] w-[4%] bg-white/30"></span
+                  ></span>
+                  <span class="w-[300px] shrink-0 text-muted">3 articles · “Duplicate charges”</span>
+                  <span class="w-14 shrink-0 text-right text-faint">180ms</span>
+                </li>
+                <li class="flex items-center gap-4 border-b border-line-2 px-5 py-[9px]">
+                  <span class="flex w-[220px] shrink-0 gap-2"
+                    ><span class="text-faint">│</span><span class="text-fg-3">tickets.similar</span></span
+                  >
+                  <span class="relative mr-4 h-1.5 flex-1"
+                    ><span class="absolute inset-y-0 left-[10%] w-[2%] bg-white/30"></span
+                  ></span>
+                  <span class="w-[300px] shrink-0 text-muted">2 past resolutions, 94% match</span>
+                  <span class="w-14 shrink-0 text-right text-faint">96ms</span>
+                </li>
+                <li class="flex items-center gap-4 border-b border-line-2 px-5 py-[9px]">
+                  <span class="flex w-[220px] shrink-0 gap-2"
+                    ><span class="text-faint">│</span><span class="text-fg-3">tool.lookup_order</span></span
+                  >
+                  <span class="relative mr-4 h-1.5 flex-1"
+                    ><span class="absolute inset-y-0 left-[14%] w-[7%] bg-ok/70"></span
+                  ></span>
+                  <span class="w-[300px] shrink-0 text-muted">order A-20931 · 2 charges of €49.00</span>
+                  <span class="w-14 shrink-0 text-right text-faint">310ms</span>
+                </li>
+                <li class="flex items-center gap-4 border-b border-line-2 px-5 py-[9px]">
+                  <span class="flex w-[220px] shrink-0 gap-2"
+                    ><span class="text-faint">│</span><span class="text-fg-3">model.turn</span></span
+                  >
+                  <span class="relative mr-4 h-1.5 flex-1"
+                    ><span class="absolute inset-y-0 left-[21%] w-[25%] bg-accent"></span
+                  ></span>
+                  <span class="w-[300px] shrink-0 text-muted">plan: refund the duplicate charge</span>
+                  <span class="w-14 shrink-0 text-right text-accent-text">1.2s</span>
+                </li>
+                <li class="flex items-center gap-4 border-b border-line-2 bg-white/2 px-5 py-[9px]">
+                  <span class="flex w-[220px] shrink-0 gap-2"
+                    ><span class="text-faint">│</span><span class="text-fg-3">tool.refund_charge</span></span
+                  >
+                  <span class="relative mr-4 h-1.5 flex-1"
+                    ><span class="absolute inset-y-0 left-[46%] w-[22%] bg-ok/70"></span
+                  ></span>
+                  <span class="w-[300px] shrink-0 text-muted">€49.00 · approved by Mia R.</span>
+                  <span class="w-14 shrink-0 text-right text-faint">1.1s</span>
+                </li>
+                <li class="flex items-center gap-4 border-b border-line-2 px-5 py-[9px]">
+                  <span class="flex w-[220px] shrink-0 gap-2"
+                    ><span class="text-faint">│</span><span class="text-fg-3">model.turn</span></span
+                  >
+                  <span class="relative mr-4 h-1.5 flex-1"
+                    ><span class="absolute inset-y-0 left-[68%] w-[22%] bg-accent"></span
+                  ></span>
+                  <span class="w-[300px] shrink-0 text-muted">draft reply · 3 citations · de</span>
+                  <span class="w-14 shrink-0 text-right text-accent-text">1.0s</span>
+                </li>
+                <li class="flex items-center gap-4 border-b border-line-2 px-5 py-[9px]">
+                  <span class="flex w-[220px] shrink-0 gap-2"
+                    ><span class="text-faint">│</span><span class="text-fg-3">policy.check</span></span
+                  >
+                  <span class="relative mr-4 h-1.5 flex-1"
+                    ><span class="absolute inset-y-0 left-[90%] w-[3%] bg-white/30"></span
+                  ></span>
+                  <span class="w-[300px] shrink-0 text-muted">auto-send allowed · confidence 0.93</span>
+                  <span class="w-14 shrink-0 text-right text-faint">40ms</span>
+                </li>
+                <li class="flex items-center gap-4 px-5 py-[9px]">
+                  <span class="flex w-[220px] shrink-0 gap-2"
+                    ><span class="text-faint">└</span><span class="text-fg-3">reply.sent</span></span
+                  >
+                  <span class="relative mr-4 h-1.5 flex-1"
+                    ><span class="absolute inset-y-0 left-[93%] w-[7%] bg-white/30"></span
+                  ></span>
+                  <span class="w-[300px] shrink-0 text-muted">via email · thread #4821</span>
+                  <span class="w-14 shrink-0 text-right text-faint">320ms</span>
+                </li>
+              </ol>
+              <div class="flex items-center gap-5 border-t border-line px-5 py-3 text-[11px] text-faint">
+                <span class="flex items-center gap-[7px]"><span class="h-1.5 w-3 bg-accent"></span>model</span>
+                <span class="flex items-center gap-[7px]"
+                  ><span class="h-1.5 w-3 bg-white/30"></span>tool / system</span
+                >
+                <span class="flex items-center gap-[7px]"><span class="h-1.5 w-3 bg-ok/70"></span>integration</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 02 What it does -->
+      <section id="capabilities" class="scroll-mt-4 border-b border-line py-16 md:py-24">
+        <div class="wrap flex flex-col gap-12">
+          <div class="flex flex-col gap-4 lg:flex-row lg:gap-0">
+            <div class="flex flex-col gap-1.5 lg:w-[280px] lg:shrink-0">
+              <span class="label text-accent-text">02</span>
+              <span class="label text-faint">WHAT IT DOES</span>
+            </div>
+            <h2 class="max-w-[640px] text-[28px]/[32px] font-semibold tracking-[-1px] text-fg md:text-[34px]/[37px]">
+              A support team's worth of work, written down as it happens.
+            </h2>
+          </div>
+
+          <ul class="border-t border-line">
+            <li class="flex flex-col gap-3 border-b border-line py-7 lg:flex-row lg:gap-0">
+              <span class="font-mono text-[11px] tracking-[0.4px] text-faint lg:w-20 lg:shrink-0">02.1</span>
+              <h3 class="text-[17px] font-medium tracking-[-0.3px] text-fg lg:w-[200px] lg:shrink-0">Answers first</h3>
+              <p class="flex-1 text-[14.5px]/[23px] text-muted">
+                Triages on arrival: intent, language, priority, tags, sentiment. Researches your knowledge, past
+                tickets and the customer profile, then drafts or sends a grounded reply with cited sources.
+              </p>
+              <span
+                class="flex flex-wrap gap-1.5 font-mono text-[11px] text-fg-3 lg:w-[340px] lg:shrink-0 lg:flex-nowrap lg:justify-end lg:self-start lg:pl-10"
+              >
+                <span class="bg-white/2 px-2 py-1">triage</span>
+                <span class="bg-white/2 px-2 py-1">research</span>
+                <span class="bg-white/2 px-2 py-1">reply</span>
+              </span>
+            </li>
+            <li class="flex flex-col gap-3 border-b border-line py-7 lg:flex-row lg:gap-0">
+              <span class="font-mono text-[11px] tracking-[0.4px] text-faint lg:w-20 lg:shrink-0">02.2</span>
+              <h3 class="text-[17px] font-medium tracking-[-0.3px] text-fg lg:w-[200px] lg:shrink-0">Takes actions</h3>
+              <p class="flex-1 text-[14.5px]/[23px] text-muted">
+                Looks up an order, refunds a charge, files a Jira bug. Anything with consequences waits for a human to
+                approve it.
+              </p>
+              <span
+                class="flex flex-wrap gap-1.5 font-mono text-[11px] text-fg-3 lg:w-[340px] lg:shrink-0 lg:flex-nowrap lg:justify-end lg:self-start lg:pl-10"
+              >
+                <span class="bg-white/2 px-2 py-1">lookup_order</span>
+                <span class="flex items-center gap-1.5 bg-white/2 px-2 py-1"
+                  ><span class="size-[5px] bg-warn" title="needs approval"></span>refund_charge</span
+                >
+                <span class="bg-white/2 px-2 py-1">jira.issue</span>
+              </span>
+            </li>
+            <li class="flex flex-col gap-3 border-b border-line py-7 lg:flex-row lg:gap-0">
+              <span class="font-mono text-[11px] tracking-[0.4px] text-faint lg:w-20 lg:shrink-0">02.3</span>
+              <h3 class="text-[17px] font-medium tracking-[-0.3px] text-fg lg:w-[200px] lg:shrink-0">
+                Knows your docs
+              </h3>
+              <p class="flex-1 text-[14.5px]/[23px] text-muted">
+                Help articles plus synced sources, searched by meaning and keywords with local multilingual embeddings.
+              </p>
+              <span
+                class="flex flex-wrap gap-1.5 font-mono text-[11px] text-fg-3 lg:w-[340px] lg:shrink-0 lg:flex-nowrap lg:justify-end lg:self-start lg:pl-10"
+              >
+                <span class="bg-white/2 px-2 py-1">Confluence</span>
+                <span class="bg-white/2 px-2 py-1">Notion</span>
+                <span class="bg-white/2 px-2 py-1">Jira</span>
+                <span class="bg-white/2 px-2 py-1">Zendesk HC</span>
+                <span class="bg-white/2 px-2 py-1">Files</span>
+              </span>
+            </li>
+            <li class="flex flex-col gap-3 border-b border-line py-7 lg:flex-row lg:gap-0">
+              <span class="font-mono text-[11px] tracking-[0.4px] text-faint lg:w-20 lg:shrink-0">02.4</span>
+              <h3 class="text-[17px] font-medium tracking-[-0.3px] text-fg lg:w-[200px] lg:shrink-0">
+                One thread per customer
+              </h3>
+              <p class="flex-1 text-[14.5px]/[23px] text-muted">
+                Email via SMTP, forwarding or webhooks, an embeddable chat widget, Slack and Discord with two-way sync,
+                and a REST API.
+              </p>
+              <span
+                class="flex flex-wrap gap-1.5 font-mono text-[11px] text-fg-3 lg:w-[340px] lg:shrink-0 lg:flex-nowrap lg:justify-end lg:self-start lg:pl-10"
+              >
+                <span class="bg-white/2 px-2 py-1">email</span>
+                <span class="bg-white/2 px-2 py-1">widget</span>
+                <span class="bg-white/2 px-2 py-1">slack</span>
+                <span class="bg-white/2 px-2 py-1">discord</span>
+                <span class="bg-white/2 px-2 py-1">api</span>
+              </span>
+            </li>
+            <li class="flex flex-col gap-3 border-b border-line py-7 lg:flex-row lg:gap-0">
+              <span class="font-mono text-[11px] tracking-[0.4px] text-faint lg:w-20 lg:shrink-0">02.5</span>
+              <h3 class="text-[17px] font-medium tracking-[-0.3px] text-fg lg:w-[200px] lg:shrink-0">
+                Built for teams
+              </h3>
+              <p class="flex-1 text-[14.5px]/[23px] text-muted">
+                Multi-tenant by design. Invite your team, set roles, and give every workspace its own channels, AI
+                settings and branding.
+              </p>
+              <span
+                class="flex flex-wrap gap-1.5 font-mono text-[11px] text-fg-3 lg:w-[340px] lg:shrink-0 lg:flex-nowrap lg:justify-end lg:self-start lg:pl-10"
+              >
+                <span class="bg-white/2 px-2 py-1">owner</span>
+                <span class="bg-white/2 px-2 py-1">admin</span>
+                <span class="bg-white/2 px-2 py-1">agent</span>
+              </span>
+            </li>
+            <li class="flex flex-col gap-3 border-b border-line py-7 lg:flex-row lg:gap-0">
+              <span class="font-mono text-[11px] tracking-[0.4px] text-faint lg:w-20 lg:shrink-0">02.6</span>
+              <h3 class="text-[17px] font-medium tracking-[-0.3px] text-fg lg:w-[200px] lg:shrink-0">Local first</h3>
+              <p class="flex-1 text-[14.5px]/[23px] text-muted">
+                Postgres and Mailpit in docker-compose, no cloud account needed. Without an Anthropic key the agent runs
+                on local heuristics.
+              </p>
+              <span
+                class="flex flex-wrap gap-1.5 font-mono text-[11px] text-fg-3 lg:w-[340px] lg:shrink-0 lg:flex-nowrap lg:justify-end lg:self-start lg:pl-10"
+              >
+                <span class="bg-white/2 px-2 py-1">postgres</span>
+                <span class="bg-white/2 px-2 py-1">pgvector</span>
+                <span class="bg-white/2 px-2 py-1">mailpit</span>
+              </span>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- 03 Autopilot -->
+      <section id="autopilot" class="scroll-mt-4 border-b border-line bg-cell py-16 md:py-24">
+        <div class="wrap flex flex-col gap-12">
+          <div class="flex flex-col gap-4 lg:flex-row lg:gap-0">
+            <div class="flex flex-col gap-1.5 lg:w-[280px] lg:shrink-0">
+              <span class="label text-accent-text">03</span>
+              <span class="label text-faint">AUTOPILOT</span>
+            </div>
+            <div class="flex flex-col gap-3.5">
+              <h2 class="max-w-[640px] text-[28px]/[32px] font-semibold tracking-[-1px] text-fg md:text-[34px]/[37px]">
+                Switch on autopilot after the tests pass, not before.
+              </h2>
+              <p class="max-w-[600px] text-[15.5px]/[25px] text-muted">
+                Policies decide what may auto-send and what waits for a person. Simulate any conversation against the
+                real agent and run graded suites before you let it reply alone.
+              </p>
+            </div>
+          </div>
+
+          <div class="flex flex-col bg-panel lg:flex-row">
+            <div class="flex flex-1 flex-col border-line max-lg:border-b lg:border-r">
+              <div
+                class="flex items-center justify-between gap-4 border-b border-line px-5 py-3.5 font-mono text-[11px]"
+              >
+                <span class="tracking-[1.2px] text-fg-3">POLICY · billing</span>
+                <span class="text-faint">v12 · edited by Mia</span>
+              </div>
+              <div class="flex flex-col gap-[18px] overflow-x-auto p-5 font-mono whitespace-nowrap">
+                <div class="flex flex-col gap-2">
+                  <span class="flex items-center gap-2 text-[11px] tracking-[1px] text-ok"
+                    ><span class="size-1.5 bg-ok"></span>AUTO-SEND when</span
+                  >
+                  <span class="flex gap-2.5 pl-3.5 text-[12.5px] text-fg-2"
+                    ><span class="text-xs text-faint">│</span>intent in [shipping.status, password.reset]</span
+                  >
+                  <span class="flex gap-2.5 pl-3.5 text-[12.5px] text-fg-2"
+                    ><span class="text-xs text-faint">│</span>confidence ≥ 0.85</span
+                  >
+                  <span class="flex gap-2.5 pl-3.5 text-[12.5px] text-fg-2"
+                    ><span class="text-xs text-faint">│</span>sentiment &gt; -0.4</span
+                  >
+                </div>
+                <div class="flex flex-col gap-2">
+                  <span class="flex items-center gap-2 text-[11px] tracking-[1px] text-warn"
+                    ><span class="size-1.5 bg-warn"></span>ASK A HUMAN when</span
+                  >
+                  <span class="flex gap-2.5 pl-3.5 text-[12.5px] text-fg-2"
+                    ><span class="text-xs text-faint">│</span>action = refund_charge and amount &gt; €25</span
+                  >
+                  <span class="flex gap-2.5 pl-3.5 text-[12.5px] text-fg-2"
+                    ><span class="text-xs text-faint">│</span>customer.plan = enterprise</span
+                  >
+                </div>
+                <div class="flex flex-col gap-2">
+                  <span class="flex items-center gap-2 text-[11px] tracking-[1px] text-danger"
+                    ><span class="size-1.5 bg-danger"></span>NEVER when</span
+                  >
+                  <span class="flex gap-2.5 pl-3.5 text-[12.5px] text-fg-2"
+                    ><span class="text-xs text-faint">│</span>close a ticket tagged legal</span
+                  >
+                </div>
+              </div>
+            </div>
+
+            <div class="flex flex-1 flex-col">
+              <div
+                class="flex items-center justify-between gap-4 border-b border-line px-5 py-3.5 font-mono text-[11px]"
+              >
+                <span class="tracking-[1.2px] text-fg-3">SUITE · refunds-de · 24 cases</span>
+                <span class="text-faint">ran 2m ago</span>
+              </div>
+              <ul class="text-[13px] text-fg-2">
+                <li class="flex items-center gap-3 border-b border-line-2 px-5 py-[11px]">
+                  <i data-icon="circle-check" class="size-[13px] shrink-0 text-ok"></i>
+                  <span class="flex-1">Double charge, polite</span>
+                  <span class="font-mono text-[11px] text-muted">refund + reply</span>
+                  <span class="w-9 text-right font-mono text-[11px] text-faint">0.96</span>
+                </li>
+                <li class="flex items-center gap-3 border-b border-line-2 px-5 py-[11px]">
+                  <i data-icon="circle-check" class="size-[13px] shrink-0 text-ok"></i>
+                  <span class="flex-1">Double charge, angry, enterprise</span>
+                  <span class="font-mono text-[11px] text-muted">ask a human</span>
+                  <span class="w-9 text-right font-mono text-[11px] text-faint">0.94</span>
+                </li>
+                <li class="flex items-center gap-3 border-b border-line-2 px-5 py-[11px]">
+                  <i data-icon="circle-check" class="size-[13px] shrink-0 text-ok"></i>
+                  <span class="flex-1">Refund after 90 days</span>
+                  <span class="font-mono text-[11px] text-muted">decline, cite policy</span>
+                  <span class="w-9 text-right font-mono text-[11px] text-faint">0.91</span>
+                </li>
+                <li class="flex items-center gap-3 border-b border-line-2 px-5 py-[11px]">
+                  <i data-icon="circle-x" class="size-[13px] shrink-0 text-danger"></i>
+                  <span class="flex-1">Chargeback threat</span>
+                  <span class="font-mono text-[11px] text-muted">escalate to billing</span>
+                  <span class="w-9 text-right font-mono text-[11px] text-danger">0.58</span>
+                </li>
+                <li class="flex items-center gap-3 border-b border-line-2 px-5 py-[11px]">
+                  <i data-icon="circle-check" class="size-[13px] shrink-0 text-ok"></i>
+                  <span class="flex-1">Wrong currency on invoice</span>
+                  <span class="font-mono text-[11px] text-muted">reply with corrected PDF</span>
+                  <span class="w-9 text-right font-mono text-[11px] text-faint">0.89</span>
+                </li>
+                <li class="flex items-center gap-3 border-b border-line-2 px-5 py-[11px]">
+                  <i data-icon="circle-check" class="size-[13px] shrink-0 text-ok"></i>
+                  <span class="flex-1">Refund + cancel subscription</span>
+                  <span class="font-mono text-[11px] text-muted">two actions, approval</span>
+                  <span class="w-9 text-right font-mono text-[11px] text-faint">0.92</span>
+                </li>
+              </ul>
+              <div class="flex flex-col gap-3 px-5 py-4">
+                <div class="flex h-1.5 gap-0.5">
+                  <span class="flex-1 bg-ok/70"></span>
+                  <span class="w-10 bg-danger"></span>
+                </div>
+                <div class="flex items-center justify-between font-mono">
+                  <span class="text-xs text-fg-3">22 passed · 2 failed · 91.7%</span>
+                  <span class="flex items-center gap-2 text-[11px] text-muted">
+                    autopilot
+                    <span class="relative h-[18px] w-8 bg-white/6" role="img" aria-label="autopilot off">
+                      <span class="absolute top-[3px] left-[3px] size-3 bg-muted"></span>
+                    </span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 04 Channels -->
+      <section id="channels" class="scroll-mt-4 border-b border-line py-16 md:py-24">
+        <div class="wrap flex flex-col gap-12">
+          <div class="flex flex-col gap-4 lg:flex-row lg:gap-0">
+            <div class="flex flex-col gap-1.5 lg:w-[280px] lg:shrink-0">
+              <span class="label text-accent-text">04</span>
+              <span class="label text-faint">CHANNELS</span>
+            </div>
+            <div class="flex flex-col gap-3.5">
+              <h2 class="max-w-[640px] text-[28px]/[32px] font-semibold tracking-[-1px] text-fg md:text-[34px]/[37px]">
+                Wherever they write, it's one thread.
+              </h2>
+              <p class="max-w-[600px] text-[15.5px]/[25px] text-muted">
+                A customer emails, follows up in the chat widget, and your engineer chimes in from Slack. trace keeps it
+                as one conversation with one trace.
+              </p>
+            </div>
+          </div>
+
+          <div class="flex flex-col lg:flex-row">
+            <ol class="flex-1 border-line bg-panel lg:border-r">
+              <li class="flex gap-3.5 border-b border-line-2 px-5 py-4">
+                <span class="flex size-7 shrink-0 items-center justify-center bg-white/2 text-fg-3"
+                  ><i data-icon="mail" class="size-[13px]"></i
+                ></span>
+                <div class="flex flex-1 flex-col gap-[5px]">
+                  <div class="flex items-center gap-2.5">
+                    <span class="text-[13px] font-medium text-fg">Anna Keller</span>
+                    <span class="font-mono text-[10.5px] tracking-[1.2px] text-faint">EMAIL</span>
+                    <span class="font-mono text-[11px] text-faint">09:12</span>
+                  </div>
+                  <p class="text-[13.5px]/[21px] text-fg-2">
+                    I was charged twice for the March invoice. Can you check?
+                  </p>
+                </div>
+              </li>
+              <li class="flex gap-3.5 border-b border-line-2 px-5 py-4">
+                <span class="flex size-7 shrink-0 items-center justify-center bg-white/2 text-fg-3"
+                  ><i data-icon="message-square" class="size-[13px]"></i
+                ></span>
+                <div class="flex flex-1 flex-col gap-[5px]">
+                  <div class="flex items-center gap-2.5">
+                    <span class="text-[13px] font-medium text-fg">Anna Keller</span>
+                    <span class="font-mono text-[10.5px] tracking-[1.2px] text-faint">WIDGET</span>
+                    <span class="font-mono text-[11px] text-faint">09:31</span>
+                  </div>
+                  <p class="text-[13.5px]/[21px] text-fg-2">
+                    Following up here, the second charge is still pending on my card.
+                  </p>
+                </div>
+              </li>
+              <li class="flex gap-3.5 border-b border-line-2 bg-accent/4 px-5 py-4">
+                <span class="flex size-7 shrink-0 items-center justify-center bg-white/2 text-accent"
+                  ><i data-icon="sparkles" class="size-[13px]"></i
+                ></span>
+                <div class="flex flex-1 flex-col gap-[5px]">
+                  <div class="flex items-center gap-2.5">
+                    <span class="text-[13px] font-medium text-accent-text">trace</span>
+                    <span class="font-mono text-[10.5px] tracking-[1.2px] text-faint">AGENT</span>
+                    <span class="font-mono text-[11px] text-faint">09:31</span>
+                  </div>
+                  <p class="text-[13.5px]/[21px] text-accent-text">
+                    Refund of €49.00 is waiting for approval. Sources: Duplicate charges, Refund policy.
+                  </p>
+                </div>
+              </li>
+              <li class="flex gap-3.5 border-b border-line-2 px-5 py-4">
+                <span class="flex size-7 shrink-0 items-center justify-center bg-white/2 text-fg-3"
+                  ><i data-icon="slack" class="size-[13px]"></i
+                ></span>
+                <div class="flex flex-1 flex-col gap-[5px]">
+                  <div class="flex items-center gap-2.5">
+                    <span class="text-[13px] font-medium text-fg">Mia R.</span>
+                    <span class="font-mono text-[10.5px] tracking-[1.2px] text-faint">SLACK · #billing</span>
+                    <span class="font-mono text-[11px] text-faint">09:34</span>
+                  </div>
+                  <p class="text-[13.5px]/[21px] text-fg-2">Approved. Thanks for catching the duplicate.</p>
+                </div>
+              </li>
+              <li class="flex gap-3.5 px-5 py-4">
+                <span class="flex size-7 shrink-0 items-center justify-center bg-white/2 text-fg-3"
+                  ><i data-icon="mail" class="size-[13px]"></i
+                ></span>
+                <div class="flex flex-1 flex-col gap-[5px]">
+                  <div class="flex items-center gap-2.5">
+                    <span class="text-[13px] font-medium text-fg">trace</span>
+                    <span class="font-mono text-[10.5px] tracking-[1.2px] text-faint">EMAIL</span>
+                    <span class="font-mono text-[11px] text-faint">09:34</span>
+                  </div>
+                  <p class="text-[13.5px]/[21px] text-fg-2">
+                    Hi Anna, we refunded the duplicate charge of €49.00. It'll show on your card in 3–5 days.
+                  </p>
+                </div>
+              </li>
+            </ol>
+
+            <ul class="bg-cell lg:w-[360px] lg:shrink-0">
+              <li class="flex items-center gap-3.5 border-b border-line-2 px-5 py-[18px]">
+                <i data-icon="mail" class="size-4 shrink-0 text-fg-3"></i>
+                <div class="flex flex-col gap-[3px]">
+                  <span class="text-sm font-medium text-fg">Email</span>
+                  <span class="font-mono text-[11px] text-muted">SMTP · forwarding · inbound webhooks</span>
+                </div>
+              </li>
+              <li class="flex items-center gap-3.5 border-b border-line-2 px-5 py-[18px]">
+                <i data-icon="message-square" class="size-4 shrink-0 text-fg-3"></i>
+                <div class="flex flex-col gap-[3px]">
+                  <span class="text-sm font-medium text-fg">Chat widget</span>
+                  <span class="font-mono text-[11px] text-muted">one script tag, your branding</span>
+                </div>
+              </li>
+              <li class="flex items-center gap-3.5 border-b border-line-2 px-5 py-[18px]">
+                <i data-icon="slack" class="size-4 shrink-0 text-fg-3"></i>
+                <div class="flex flex-col gap-[3px]">
+                  <span class="text-sm font-medium text-fg">Slack</span>
+                  <span class="font-mono text-[11px] text-muted">alerts · two-way thread sync · /trace</span>
+                </div>
+              </li>
+              <li class="flex items-center gap-3.5 border-b border-line-2 px-5 py-[18px]">
+                <i data-icon="message-circle" class="size-4 shrink-0 text-fg-3"></i>
+                <div class="flex flex-col gap-[3px]">
+                  <span class="text-sm font-medium text-fg">Discord</span>
+                  <span class="font-mono text-[11px] text-muted">intake channels · thread sync</span>
+                </div>
+              </li>
+              <li class="flex items-center gap-3.5 px-5 py-[18px]">
+                <i data-icon="braces" class="size-4 shrink-0 text-fg-3"></i>
+                <div class="flex flex-col gap-[3px]">
+                  <span class="text-sm font-medium text-fg">REST API</span>
+                  <span class="font-mono text-[11px] text-muted">create tickets from your own systems</span>
+                </div>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- 05 Self-host -->
+      <section id="self-host" class="scroll-mt-4 border-b border-line bg-cell py-16 md:py-24">
+        <div class="wrap flex flex-col gap-12">
+          <div class="flex flex-col gap-4 lg:flex-row lg:gap-0">
+            <div class="flex flex-col gap-1.5 lg:w-[280px] lg:shrink-0">
+              <span class="label text-accent-text">05</span>
+              <span class="label text-faint">SELF-HOST</span>
+            </div>
+            <div class="flex flex-col gap-3.5">
+              <h2 class="max-w-[640px] text-[28px]/[32px] font-semibold tracking-[-1px] text-fg md:text-[34px]/[37px]">
+                Your tickets stay on your server.
+              </h2>
+              <p class="max-w-[600px] text-[15.5px]/[25px] text-muted">
+                MIT licensed. Postgres with pgvector, a local embedding model, and Caddy for HTTPS. Point a domain at a
+                small VPS and you're done.
+              </p>
+            </div>
+          </div>
+
+          <div class="flex flex-col gap-12 lg:flex-row">
+            <ol class="border-t border-line lg:w-[420px] lg:shrink-0">
+              <li class="flex gap-4 border-b border-line py-5">
+                <span class="font-mono text-[11px] tracking-[0.4px] text-faint">01</span>
+                <a
+                  href="https://github.com/ontrace-dev/trace#deploy-any-server-with-docker"
+                  class="group flex flex-1 flex-col gap-1.5"
+                >
+                  <span class="flex items-center gap-2.5">
+                    <span class="text-[15px] font-medium text-fg group-hover:underline">Any VPS with Docker</span>
+                    <span class="px-1.5 py-0.5 font-mono text-[10.5px] text-ok">recommended</span>
+                  </span>
+                  <span class="text-[13.5px]/[21px] text-muted"
+                    >Hetzner CX22 and up. Postgres, trace and Caddy with Let's Encrypt.</span
+                  >
+                </a>
+              </li>
+              <li class="flex gap-4 border-b border-line py-5">
+                <span class="font-mono text-[11px] tracking-[0.4px] text-faint">02</span>
+                <a
+                  href="https://github.com/ontrace-dev/trace#coolify-with-a-shared-demo"
+                  class="group flex flex-1 flex-col gap-1.5"
+                >
+                  <span class="text-[15px] font-medium text-fg group-hover:underline">Coolify</span>
+                  <span class="text-[13.5px]/[21px] text-muted"
+                    >Compose build pack. Domain, HTTPS and secrets are generated for you.</span
+                  >
+                </a>
+              </li>
+              <li class="flex gap-4 border-b border-line py-5">
+                <span class="font-mono text-[11px] tracking-[0.4px] text-faint">03</span>
+                <a
+                  href="https://github.com/ontrace-dev/trace#free-test-deploy-render--supabase"
+                  class="group flex flex-1 flex-col gap-1.5"
+                >
+                  <span class="text-[15px] font-medium text-fg group-hover:underline">Render + Supabase</span>
+                  <span class="text-[13.5px]/[21px] text-muted"
+                    >Free test deploy. Sleeps when idle, fine for clicking around.</span
+                  >
+                </a>
+              </li>
+            </ol>
+
+            <div class="flex min-w-0 flex-1 flex-col bg-term lg:self-start">
+              <div
+                class="flex items-center justify-between border-b border-line px-4 py-2.5 font-mono text-[11px] text-faint"
+              >
+                <span>zsh · ~/trace</span>
+                <button
+                  type="button"
+                  class="flex cursor-pointer items-center gap-1.5 hover:text-fg-3"
+                  data-copy="git clone https://github.com/ontrace-dev/trace.git &amp;&amp; cd trace
+cp .env.prod.example .env
+docker compose -f docker-compose.prod.yml up -d --build"
+                >
+                  <i data-icon="copy" class="size-3"></i><span data-copy-label>copy</span>
+                </button>
+              </div>
+              <pre
+                class="overflow-x-auto px-5 py-[18px] font-mono text-[12.5px]/[27px] text-fg-2"
+              >$ git clone https://github.com/ontrace-dev/trace.git &amp;&amp; cd trace
+$ cp .env.prod.example .env
+<span class="text-faint"># set DOMAIN, POSTGRES_PASSWORD, BETTER_AUTH_SECRET</span>
+$ docker compose -f docker-compose.prod.yml up -d --build
+
+<span class="text-ok">✓ postgres (pgvector)   healthy
+✓ trace                migrations applied · 0.4s
+✓ caddy                certificate issued for support.acme.com</span>
+<span class="text-accent-text">→ https://support.acme.com</span></pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Final CTA -->
+      <section
+        class="relative overflow-hidden border-b border-line py-20 lg:min-h-[460px] lg:py-0 lg:flex lg:flex-col lg:justify-center"
+      >
+        <div
+          class="trace-field"
+          aria-hidden="true"
+          style="top: -120px; --mask-x: -200px; --mask-y: 60px; --mask-w: 1100px; --mask-h: 640px"
+        ></div>
+        <div class="wrap relative">
+          <div class="flex max-w-[620px] flex-col gap-[22px] md:mx-12">
+            <span class="label text-accent-text">TRACE/YOUR-FIRST-TICKET</span>
+            <h2 class="text-[34px]/[38px] font-semibold tracking-[-1.4px] text-fg md:text-[44px]/[47px]">
+              Open the demo. Read the trace. Then decide.
+            </h2>
+            <p class="max-w-[520px] text-[15.5px]/[25px] text-muted">
+              No sign-up, no sales call. The shared workspace has real-looking tickets, AI drafts, a pending approval
+              and a week of history.
+            </p>
+            <div class="flex flex-wrap items-center gap-2.5 pt-1.5">
+              <a
+                href="https://app.ontrace.dev/login"
+                class="flex h-10 items-center gap-2 bg-fg px-[18px] text-sm font-medium text-ink hover:bg-white"
+              >
+                Enter the demo <i data-icon="arrow-right" class="size-[15px]"></i>
+              </a>
+              <a
+                href="https://github.com/ontrace-dev/trace"
+                class="flex h-10 items-center gap-2 bg-white/4 px-[18px] text-sm font-medium text-fg hover:bg-white/8"
+              >
+                <i data-icon="github" class="size-[15px]"></i> Star on GitHub
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="pt-14">
+      <div class="wrap flex flex-col gap-14">
+        <div class="grid grid-cols-2 gap-10 md:px-12 lg:flex lg:gap-0">
+          <div class="col-span-2 flex flex-col gap-3.5 lg:flex-1">
+            <span class="flex items-center gap-3">
+              <span class="relative size-4 shrink-0 bg-fg">
+                <span class="absolute top-[7px] left-0 h-0.5 w-4 bg-ink"></span>
+                <span class="absolute top-0 left-[9px] h-[7px] w-0.5 bg-ink"></span>
+              </span>
+              <span class="font-mono text-[13px] font-semibold tracking-[1.6px] text-fg">TRACE.</span>
+            </span>
+            <span class="text-[13.5px] text-muted">Open source, AI-native support.</span>
+          </div>
+          <nav class="flex flex-col gap-3 text-[13.5px] text-fg-3 lg:w-[180px]">
+            <span class="label text-faint">PRODUCT</span>
+            <a href="#channels" class="hover:text-fg">Inbox</a>
+            <a href="#receipt" class="hover:text-fg">Agent &amp; traces</a>
+            <a href="#capabilities" class="hover:text-fg">Knowledge</a>
+            <a href="#autopilot" class="hover:text-fg">Test suites</a>
+            <a href="https://github.com/ontrace-dev/trace/releases" class="hover:text-fg">Changelog</a>
+          </nav>
+          <nav class="flex flex-col gap-3 text-[13.5px] text-fg-3 lg:w-[180px]">
+            <span class="label text-faint">SELF-HOST</span>
+            <a href="https://github.com/ontrace-dev/trace#deploy-any-server-with-docker" class="hover:text-fg"
+              >Docker</a
+            >
+            <a href="https://github.com/ontrace-dev/trace#coolify-with-a-shared-demo" class="hover:text-fg"
+              >Coolify</a
+            >
+            <a href="https://github.com/ontrace-dev/trace#free-test-deploy-render--supabase" class="hover:text-fg"
+              >Render</a
+            >
+            <a href="https://github.com/ontrace-dev/trace/blob/main/.env.prod.example" class="hover:text-fg"
+              >Configuration</a
+            >
+          </nav>
+          <nav class="flex flex-col gap-3 text-[13.5px] text-fg-3 lg:w-[180px]">
+            <span class="label text-faint">PROJECT</span>
+            <a href="https://github.com/ontrace-dev/trace" class="hover:text-fg">GitHub</a>
+            <a href="https://github.com/ontrace-dev/trace/discussions" class="hover:text-fg">Discussions</a>
+            <a href="https://github.com/ontrace-dev/trace/security" class="hover:text-fg">Security</a>
+            <a href="https://github.com/ontrace-dev/trace/blob/main/LICENSE" class="hover:text-fg"
+              >License (MIT)</a
+            >
+          </nav>
+        </div>
+        <div
+          class="flex flex-col gap-3 border-t border-line py-[18px] font-mono text-[11px] tracking-[0.4px] text-faint sm:flex-row sm:items-center sm:justify-between md:px-12"
+        >
+          <span>trace · open source, AI-native support · MIT · ontrace.dev</span>
+          <span class="flex items-center gap-2"
+            ><span class="size-1.5 bg-ok"></span><span data-reset="demo">demo resets daily</span></span
+          >
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>

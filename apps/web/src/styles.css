@@ -1,0 +1,237 @@
+@import "tailwindcss";
+
+/* Short browser windows (laptops with toolbars, zoom, display scaling): screens that must fit without
+   scrolling, like sign-in, tighten up. */
+@custom-variant short (@media (max-height: 760px));
+@custom-variant tiny (@media (max-height: 620px));
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+
+/* trace design tokens — mirrored from the pen.dev design ("tr-*" variables).
+   Readability: surfaces are lifted off pure black (less glare), and text uses three levels tuned with
+   APCA on every surface incl. accent-tinted panels — primary/strong (fg, fg-2: Lc 85–96),
+   secondary (fg-3, body: Lc 75), tertiary (muted, dim: Lc 62). No text below 11px.
+   Hierarchy comes from size, weight and the mono label style — not from dimming text. */
+@theme {
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --color-bg: #0e0e11;
+  --color-bar: #131317;
+  --color-panel: #121215;
+  --color-cell: #101013;
+  --color-raised: #17171c;
+  --color-input: #121216;
+  --color-line: #ffffff17;
+  --color-line-2: #ffffff0f;
+  --color-line-strong: #ffffff26;
+  --color-fg: #ededed;
+  --color-fg-2: #dcdce6;
+  --color-fg-3: #cdcdd7;
+  --color-body: #cdcdd7;
+  --color-muted: #b7b7c1;
+  --color-dim: #b7b7c1;
+  --color-faint: #6e6e7a;
+  --color-accent: var(--tr-accent, #b9a3ff);
+  --color-accent-fg: #dcd3ff;
+  /* Accent for text: brand hue, lightened so small labels stay readable on accent-tinted panels. */
+  --color-accent-text: color-mix(in srgb, var(--color-accent) 70%, white);
+  --color-ok: #86efac;
+  --color-warn: #fdba74;
+  --color-danger: #fca5a5;
+  --color-info: #93c5fd;
+
+  --text-2xs: 11px;
+  --text-xs: 11px;
+  --text-sm: 12.5px;
+  --text-base: 13px;
+}
+
+:root {
+  color-scheme: dark;
+  --tr-accent: #b9a3ff;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #ffffff1f transparent;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-accent) 35%, transparent);
+}
+
+:focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--color-accent) 70%, transparent);
+  outline-offset: 1px;
+}
+
+@utility label-mono {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-dim);
+}
+
+@utility accent-soft {
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+}
+
+/* Rendered markdown (articles, AI answers, messages). */
+.prose-trace {
+  line-height: 1.65;
+  color: var(--color-fg-3);
+}
+.prose-trace p {
+  margin: 0 0 0.75em;
+}
+.prose-trace p:last-child {
+  margin-bottom: 0;
+}
+.prose-trace h1,
+.prose-trace h2,
+.prose-trace h3 {
+  color: var(--color-fg);
+  font-weight: 600;
+  margin: 1.2em 0 0.5em;
+  letter-spacing: -0.01em;
+}
+.prose-trace h1 {
+  font-size: 20px;
+}
+.prose-trace h2 {
+  font-size: 16px;
+}
+.prose-trace h3 {
+  font-size: 14px;
+}
+.prose-trace ul,
+.prose-trace ol {
+  padding-left: 1.2em;
+  margin: 0 0 0.75em;
+}
+.prose-trace ul {
+  list-style: disc;
+}
+.prose-trace ol {
+  list-style: decimal;
+}
+.prose-trace a {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.prose-trace code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: #ffffff0d;
+  padding: 1px 4px;
+}
+.prose-trace pre {
+  background: #ffffff08;
+  border: 1px solid var(--color-line);
+  padding: 10px 12px;
+  overflow-x: auto;
+  margin: 0 0 0.75em;
+}
+.prose-trace pre code {
+  background: none;
+  padding: 0;
+}
+.prose-trace blockquote {
+  border-left: 2px solid var(--color-line-strong);
+  padding-left: 10px;
+  color: var(--color-muted);
+}
+.prose-trace strong {
+  color: var(--color-fg);
+  font-weight: 600;
+}
+
+/* Auth screen trace background — spans writing themselves left to right. */
+.trace-field {
+  mask-image:
+    linear-gradient(90deg, #000 0%, #000 18%, #0000006b 34%, #0000006b 66%, #000 82%, #000 100%),
+    linear-gradient(180deg, transparent 0%, #000 11%, #000 70%, transparent 97%);
+  mask-composite: intersect;
+  -webkit-mask-image:
+    linear-gradient(90deg, #000 0%, #000 18%, #0000006b 34%, #0000006b 66%, #000 82%, #000 100%),
+    linear-gradient(180deg, transparent 0%, #000 11%, #000 70%, transparent 97%);
+  -webkit-mask-composite: source-in;
+}
+
+.trace-bar {
+  animation-name: trace-write;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.trace-sweep {
+  animation: trace-sweep 19s linear infinite;
+}
+
+@keyframes trace-write {
+  0% {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+  6% {
+    opacity: 1;
+  }
+  32% {
+    transform: scaleX(1);
+  }
+  84% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scaleX(1);
+    opacity: 0;
+  }
+}
+
+@keyframes trace-sweep {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(calc(100vw + 18rem), 0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trace-bar,
+  .trace-sweep {
+    animation: none;
+  }
+  .trace-bar {
+    transform: scaleX(1);
+  }
+  .trace-sweep {
+    display: none;
+  }
+}
+
+@keyframes trace-drawer-in {
+  from {
+    transform: translateX(-100%);
+  }
+}

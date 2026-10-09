@@ -1,0 +1,172 @@
+@import "tailwindcss";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+
+/* Same tokens as apps/web (mirrored from the pen.dev "tr-*" variables), plus the deeper terminal surface. */
+@theme {
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --color-bg: #0e0e11;
+  --color-panel: #121215;
+  --color-cell: #101013;
+  --color-input: #121216;
+  --color-term: #0b0b0d;
+  --color-ink: #080808;
+  --color-line: #ffffff17;
+  --color-line-2: #ffffff0f;
+  --color-fg: #ededed;
+  --color-fg-2: #dcdce6;
+  --color-fg-3: #cdcdd7;
+  --color-muted: #b7b7c1;
+  --color-faint: #6e6e7a;
+  --color-accent: #b9a3ff;
+  --color-accent-text: #d5c8ff;
+  --color-ok: #86efac;
+  --color-warn: #fdba74;
+  --color-danger: #fca5a5;
+}
+
+/* Content column: 1120px wide at desktop (160px gutters on a 1440 canvas), 16/32px gutters below. */
+@utility wrap {
+  width: 100%;
+  max-width: calc(1120px + 2 * var(--gutter));
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+
+/* Uppercase mono labels: section kickers, column heads, panel titles. */
+@utility label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 1.2px;
+}
+
+:root {
+  color-scheme: dark;
+  --gutter: 16px;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --gutter: 32px;
+  }
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-accent) 35%, transparent);
+}
+
+:focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--color-accent) 70%, transparent);
+  outline-offset: 2px;
+}
+
+/* Decorative waterfall behind the hero and the final CTA: src/trace-field.svg is inlined at build time
+   (vite.config.ts), its spans write themselves left to right like the app's sign-in background, a soft
+   violet playhead sweeps across and a radial mask keeps the copy readable. */
+.trace-field {
+  position: absolute;
+  top: 0;
+  /* Pinned left like the 1440 design below that width (the copy sits under the mask), centered above. */
+  left: max(0px, 50% - 720px);
+  width: 1440px;
+  height: 640px;
+  pointer-events: none;
+}
+
+.trace-field > svg {
+  display: block;
+  width: 1440px;
+  height: 640px;
+}
+
+.trace-bar {
+  transform-box: fill-box;
+  transform-origin: left center;
+  animation-name: trace-write;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.trace-field::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -288px;
+  width: 288px;
+  height: 640px;
+  background: linear-gradient(90deg, #b9a3ff00 0%, #b9a3ff17 50%, #b9a3ff00 100%);
+  animation: trace-sweep 19s linear infinite;
+  /* Starts mid-field, where the static design has it. */
+  animation-delay: -12.84s;
+}
+
+@keyframes trace-write {
+  0% {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+  6% {
+    opacity: 1;
+  }
+  32% {
+    transform: scaleX(1);
+  }
+  84% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scaleX(1);
+    opacity: 0;
+  }
+}
+
+@keyframes trace-sweep {
+  to {
+    transform: translate3d(1728px, 0, 0);
+  }
+}
+
+.trace-field::after {
+  content: "";
+  position: absolute;
+  left: var(--mask-x, -120px);
+  top: var(--mask-y, -60px);
+  width: var(--mask-w, 1140px);
+  height: var(--mask-h, 760px);
+  background: radial-gradient(ellipse 50% 50% at 50% 50%, #0e0e11 50%, #0e0e11b3 75%, #0e0e1100 100%);
+}
+
+/* Narrow screens: the copy spans the whole width, past the mask, so the field fades into the background. */
+@media (max-width: 1023px) {
+  .trace-field {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .trace-bar {
+    animation: none;
+  }
+  .trace-field::before {
+    animation: none;
+    transform: translate3d(1168px, 0, 0);
+  }
+}

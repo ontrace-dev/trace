@@ -1,0 +1,46 @@
+# Render Blueprint for the hosted instance at app.ontrace.dev (Render → Blueprints → New, Blueprint path
+# render.ontrace.yaml). The marketing site at ontrace.dev is deployed separately on Vercel.
+# Self-hosting? Use render.yaml (free test deploy) or docker-compose.prod.yml instead.
+services:
+  - type: web
+    name: ontrace-app
+    runtime: docker
+    # Starter never sleeps, so the AI queue, Slack/Discord connections and knowledge sync keep running.
+    # The local embedding model needs ~2 GB: switch to standard and set EMBEDDINGS=on.
+    plan: starter
+    region: frankfurt
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    # Marketing-site edits deploy on Vercel only; they don't rebuild the app.
+    buildFilter:
+      ignoredPaths:
+        - apps/site/**
+    domains:
+      - app.ontrace.dev
+    # Uploads, attachments and the embedding model cache live in DATA_DIR; without a disk they vanish on deploy.
+    disk:
+      name: data
+      mountPath: /app/.data
+      sizeGB: 5
+    envVars:
+      - key: APP_URL
+        value: https://app.ontrace.dev
+      # Supabase: Connect → Session pooler (port 5432), with ?sslmode=require appended.
+      - key: DATABASE_URL
+        sync: false
+      - key: BETTER_AUTH_SECRET
+        generateValue: true
+      - key: EMBEDDINGS
+        value: "off"
+      # Only HTTP reaches the container: receive mail through a provider's inbound webhook (/api/inbound).
+      - key: INBOUND_SMTP_PORT
+        value: "0"
+      - key: INBOUND_DOMAIN
+        sync: false
+      # e.g. smtps://resend:<api key>@smtp.resend.com:465
+      - key: SMTP_URL
+        sync: false
+      - key: MAIL_FROM
+        value: trace <no-reply@ontrace.dev>
+      - key: ANTHROPIC_API_KEY
+        sync: false

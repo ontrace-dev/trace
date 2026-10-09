@@ -1,0 +1,28 @@
+# Render Blueprint: free web service for trying trace out. Bring your own Postgres (e.g. Supabase free).
+# The free instance has 512 MB and sleeps after 15 minutes idle, so the local embedding model is off
+# (knowledge search falls back to keywords) and background jobs only run while it is awake.
+services:
+  - type: web
+    name: trace
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      # Supabase: Connect → Session pooler (port 5432), with ?sslmode=require appended.
+      - key: DATABASE_URL
+        sync: false
+      - key: BETTER_AUTH_SECRET
+        generateValue: true
+      - key: EMBEDDINGS
+        value: "off"
+      # Only HTTP reaches the container, so the built-in inbound mail server stays off.
+      - key: INBOUND_SMTP_PORT
+        value: "0"
+      # Optional: outbound mail for invites and email links, e.g. smtps://resend:<api key>@smtp.resend.com:465
+      - key: SMTP_URL
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false

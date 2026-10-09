@@ -1,0 +1,27 @@
+{
+  "name": "trace",
+  "version": "0.1.0",
+  "private": true,
+  "description": "trace — the open source, AI-native helpdesk.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vp run --filter './apps/*' --filter './packages/*' --parallel --log labeled dev",
+    "build": "vp run --filter './apps/*' --filter './packages/*' build",
+    "start": "vp run server#start",
+    "infra": "docker compose up -d postgres mailpit",
+    "setup": "docker compose up -d --wait postgres mailpit && vp run server#db:migrate && vp run server#db:seed",
+    "db:migrate": "vp run server#db:migrate",
+    "db:generate": "vp run server#db:generate",
+    "db:seed": "vp run server#db:seed",
+    "check": "vp check",
+    "ready": "vp check && vp run --filter './apps/*' --filter './packages/*' build"
+  },
+  "devDependencies": {
+    "vite-plus": "catalog:"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "packageManager": "pnpm@10.34.6"
+}

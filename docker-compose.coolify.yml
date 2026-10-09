@@ -1,0 +1,95 @@
+# trace on Coolify (Docker Compose build pack).
+#
+# In Coolify: New resource → Public/Private repository → Build pack "Docker Compose" →
+# Docker Compose location "/docker-compose.coolify.yml". Coolify fills the SERVICE_* variables itself:
+# a domain with HTTPS for the app (and one for the demo mailbox), the database password and the
+# auth secret. Optional: set ANTHROPIC_API_KEY in the Environment Variables tab.
+#
+# DEMO_MODE=true seeds the "northwind" demo workspace on first boot (demo@trace.dev / password),
+# shows a "Try the demo" button on the login page, protects the demo accounts and rebuilds the demo
+# workspace every DEMO_RESET_HOURS. Set DEMO_MODE=false for a real installation.
+
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      # Coolify generates a domain for the app and routes it to port 3000.
+      - SERVICE_FQDN_APP_3000
+      - APP_URL=${SERVICE_FQDN_APP}
+      - PUBLIC_URL=${SERVICE_FQDN_APP}
+      - DATABASE_URL=postgres://trace:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/trace
+      - BETTER_AUTH_SECRET=${SERVICE_PASSWORD_64_AUTH}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - AI_MODEL=${AI_MODEL:-claude-opus-5-5}
+      - DEMO_MODE=${DEMO_MODE:-true}
+      - DEMO_RESET_HOURS=${DEMO_RESET_HOURS:-24}
+      # Outgoing mail lands in the demo mailbox below; set a real SMTP_URL for production.
+      - SMTP_URL=${SMTP_URL:-smtp://mailpit:1025}
+      - MAIL_FROM=${MAIL_FROM:-trace <no-reply@trace.local>}
+      # Inbound SMTP needs a public port 25 and an MX record — off here; email can come in via webhooks.
+      - INBOUND_SMTP_PORT=${INBOUND_SMTP_PORT:-0}
+      - INBOUND_DOMAIN=${INBOUND_DOMAIN:-}
+      - MCP_ALLOW_STDIO=false
+      # Optional "Sign in with …" buttons; leave empty to hide them.
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - MICROSOFT_CLIENT_ID=${MICROSOFT_CLIENT_ID:-}
+      - MICROSOFT_CLIENT_SECRET=${MICROSOFT_CLIENT_SECRET:-}
+      - MICROSOFT_TENANT_ID=${MICROSOFT_TENANT_ID:-common}
+      - GITLAB_CLIENT_ID=${GITLAB_CLIENT_ID:-}
+      - GITLAB_CLIENT_SECRET=${GITLAB_CLIENT_SECRET:-}
+      - GITLAB_ISSUER=${GITLAB_ISSUER:-}
+      # Workspace SSO reaches public identity providers only; list internal IdP origins here.
+      - SSO_TRUSTED_ORIGINS=${SSO_TRUSTED_ORIGINS:-}
+    volumes:
+      # Embedding model cache and uploads.
+      - trace-data:/app/.data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/health').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  postgres:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=trace
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=trace
+    volumes:
+      - trace-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trace -d trace"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Demo mailbox: every email trace sends (replies to email tickets, invites) shows up here.
+  # Remove the SERVICE_FQDN line to keep it private.
+  mailpit:
+    image: axllent/mailpit:v1.21
+    restart: unless-stopped
+    environment:
+      - SERVICE_FQDN_MAILPIT_8025
+      - MP_MAX_MESSAGES=500
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  trace-data:
+  trace-pgdata:

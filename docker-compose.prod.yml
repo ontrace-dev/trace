@@ -1,0 +1,77 @@
+# trace in production on any Docker host (VPS, Coolify, …) with automatic HTTPS.
+#
+#   cp .env.prod.example .env      # set DOMAIN, POSTGRES_PASSWORD, BETTER_AUTH_SECRET
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Point your domain's DNS A record at the server first; Caddy fetches a Let's Encrypt certificate.
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: trace
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: trace
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trace -d trace"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  app:
+    build: .
+    image: trace-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://trace:${POSTGRES_PASSWORD}@postgres:5432/trace
+      APP_URL: https://${DOMAIN:?set DOMAIN in .env}
+      PUBLIC_URL: https://${DOMAIN}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET in .env}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      SMTP_URL: ${SMTP_URL:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      INBOUND_DOMAIN: ${INBOUND_DOMAIN:-}
+      SEED_DEMO: ${SEED_DEMO:-false}
+      # Public demo instance: seeds "northwind", protects the demo accounts, resets every DEMO_RESET_HOURS.
+      DEMO_MODE: ${DEMO_MODE:-false}
+      DEMO_RESET_HOURS: ${DEMO_RESET_HOURS:-24}
+      # Optional social logins and internal SSO identity providers (see README → Sign-in & SSO).
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      MICROSOFT_CLIENT_ID: ${MICROSOFT_CLIENT_ID:-}
+      MICROSOFT_CLIENT_SECRET: ${MICROSOFT_CLIENT_SECRET:-}
+      GITLAB_CLIENT_ID: ${GITLAB_CLIENT_ID:-}
+      GITLAB_CLIENT_SECRET: ${GITLAB_CLIENT_SECRET:-}
+      SSO_TRUSTED_ORIGINS: ${SSO_TRUSTED_ORIGINS:-}
+    ports:
+      # Inbound email. Use "25:2525" to receive mail for an MX record pointing at this server.
+      - "${INBOUND_SMTP_PORT:-2525}:2525"
+    volumes:
+      - appdata:/app/.data
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - app
+    command: caddy reverse-proxy --from ${DOMAIN} --to app:3000
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  pgdata:
+  appdata:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,53 @@
+name: trace
+
+services:
+  postgres:
+    # pgvector powers semantic knowledge search (embeddings are computed locally).
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: trace
+      POSTGRES_PASSWORD: trace
+      POSTGRES_DB: trace
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgvector-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trace -d trace"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # Local SMTP sink + web UI for every email trace sends (replies, invites).
+  # UI: http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  # The full app (API + web + widget) in one container.
+  # Start with: docker compose --profile app up --build
+  app:
+    profiles: ["app"]
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://trace:trace@postgres:5432/trace
+      APP_URL: http://localhost:3000
+      PUBLIC_URL: http://localhost:3000
+      SMTP_URL: smtp://mailpit:1025
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-change-me-in-production-please-32chars}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      SEED_DEMO: ${SEED_DEMO:-true}
+    ports:
+      - "3000:3000"
+      - "2525:2525"
+    volumes:
+      - appdata:/app/.data
+
+volumes:
+  pgvector-data:
+  appdata:
