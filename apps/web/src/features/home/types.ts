@@ -1,4 +1,4 @@
-import type { ViewFilters } from "@/lib/types";
+import type { TicketListItem, ViewFilters } from "@/lib/types";
 
 export interface QueueStats {
   total: number;
@@ -56,6 +56,7 @@ export interface NeedItem {
   waitingSince: string;
   kinds: NeedKind[];
   approval: { runId: string; title: string; reason: string | null; requestedAt: string } | null;
+  unread: boolean;
   score: number;
 }
 
@@ -97,6 +98,8 @@ export interface HomeData {
     medianFirstResponseSeconds: number | null;
   };
   queues: QueueRow[];
+  /** Unread conversations, newest first (at most 8). */
+  fresh: TicketListItem[];
 }
 
 export const homeKeys = {

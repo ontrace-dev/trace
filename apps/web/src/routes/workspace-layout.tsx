@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate, Outlet, useNavigate, useParams, useRouterState } from "@tanstack/react-router";
 import {
   BarChart3,
-  Bell,
   Bot,
   Check,
   ChevronDown,
@@ -29,6 +28,7 @@ import { Mark } from "@/components/logo";
 import { Avatar, Kbd, Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger, Tip } from "@/components/ui";
 import { CommandBar } from "@/features/command-bar";
 import { NewTicketDialog } from "@/features/new-ticket";
+import { ArrivalToasts, UnreadBell, useUnreadTitle } from "@/features/notifications";
 import { INBOX_VIEWS } from "./inbox";
 import { routingKeys } from "@/features/routing/types";
 import { ViewDialog } from "@/features/view-dialog";
@@ -97,8 +97,16 @@ function Shell() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [toggleRail]);
+  const { wid, api } = useWorkspace();
+  const counts = useQuery({
+    queryKey: qk.counts(wid),
+    queryFn: () => api<Record<string, number>>("/counts"),
+    refetchInterval: 60_000,
+  });
+  useUnreadTitle(counts.data?.unread ?? 0);
   return (
     <div className="flex h-full flex-col">
+      <ArrivalToasts />
       <AppBar
         onCommand={() => setCmdOpen(true)}
         onNewTicket={() => setNewTicket(true)}
@@ -217,15 +225,7 @@ function AppBar({
       </div>
       <div className="flex shrink-0 items-center justify-end gap-2.5 md:min-w-[300px]">
         <AiStatus />
-        <Tip label="Activity">
-          <Link
-            to="/w/$slug/inbox/$view"
-            params={{ slug, view: "ai" }}
-            className="p-1 text-muted hover:text-fg max-sm:hidden"
-          >
-            <Bell className="size-[15px]" />
-          </Link>
-        </Tip>
+        <UnreadBell />
         <Tip label="Docs & shortcuts">
           <a
             href="https://github.com/"
@@ -363,6 +363,7 @@ function RailItem({
   icon: Icon,
   label,
   count,
+  unread,
   active,
 }: {
   to: string;
@@ -370,6 +371,8 @@ function RailItem({
   icon: LucideIcon;
   label: string;
   count?: number;
+  /** Unread conversations: shown instead of the count, highlighted. */
+  unread?: number;
   active: boolean;
 }) {
   if (React.useContext(RailCollapsed))
@@ -388,11 +391,12 @@ function RailItem({
           params={params as never}
           aria-label={label}
           className={cn(
-            "flex h-8 shrink-0 items-center justify-center",
+            "relative flex h-8 shrink-0 items-center justify-center",
             active ? "bg-accent/12 text-accent-fg" : "text-dim hover:bg-white/[0.03] hover:text-fg-2",
           )}
         >
           <Icon className="size-[15px]" />
+          {unread ? <span className="absolute top-1.5 right-2 size-1.5 bg-accent" /> : null}
         </Link>
       </Tip>
     );
@@ -409,7 +413,13 @@ function RailItem({
         <Icon className={cn("size-[15px] shrink-0", active ? "text-accent-fg" : "text-dim")} />
         <span className="truncate">{label}</span>
       </span>
-      {count ? (
+      {unread ? (
+        <Tip label={`${unread} unread${count ? ` · ${count} open` : ""}`} side="right">
+          <span className="bg-accent px-1.5 font-mono text-[11px] leading-[17px] font-semibold text-[#0b0b0e]">
+            {unread}
+          </span>
+        </Tip>
+      ) : count ? (
         <span className={cn("font-mono text-[11px]", active ? "text-accent-fg" : "text-dim")}>{count}</span>
       ) : null}
     </Link>
@@ -460,6 +470,7 @@ function Rail({
             icon={Inbox}
             label="Inbox"
             count={c.inbox}
+            unread={c.unread}
             active={isInbox}
           />
           <RailItem to="/w/$slug/customers" params={{ slug }} icon={Users} label="Customers" active={at("customers")} />

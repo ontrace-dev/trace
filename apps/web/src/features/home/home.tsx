@@ -1,22 +1,21 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { ArrowRight, CircleCheck, Sparkles, TrendingUp } from "lucide-react";
+import { AlertTriangle, Hand, PenLine, TrendingUp, UserRoundCheck } from "lucide-react";
 import * as React from "react";
-import { Avatar, Spinner, StatusDot } from "@/components/ui";
-import { type Tone, toneDot } from "@/lib/ticket-state";
+import { Spinner } from "@/components/ui";
+import { useJustArrived } from "@/lib/arrivals";
+import type { TicketListItem } from "@/lib/types";
 import { ago, cn } from "@/lib/utils";
-import { useWorkspace } from "@/lib/workspace";
+import { qk, useWorkspace } from "@/lib/workspace";
+import { LastDay } from "./pulse";
 import { type HomeData, homeKeys, type HotTopic, type NeedItem, type NeedKind } from "./types";
 
 /*
- * Home answers one question: what should I do next? The headline says how much needs a person; below it the
- * work is grouped by what you'd do (decide, answer, take over, send), most urgent first. Every ticket appears
- * once, under its most important reason, with enough context (customer, what they asked, how long they've
- * waited, what the AI already did) to act without opening it first. Volume and trends live in Insights.
+ * Home: what's new, then what needs a person, as dense rows you can act on. Each ticket appears once,
+ * under its most important reason. The last-24h numbers sit on the side; trends live in Insights.
  */
 
 const humanize = (s: string) => s.replace(/_/g, " ");
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 export function HomePage() {
   const { api, wid } = useWorkspace();
@@ -36,120 +35,75 @@ export function HomePage() {
   return <HomeLayout data={q.data} />;
 }
 
-/* ------------------------------------------------------------------ lanes */
-
-interface Lane {
-  id: string;
-  kinds: NeedKind[];
-  title: (agent: string) => string;
-  hint: (agent: string) => string;
-  tone: Tone;
-  action: (i: NeedItem) => string;
-}
-
-/** In order of urgency. A ticket lands in the first lane matching its most important reason. */
-const LANES: Lane[] = [
-  {
-    id: "decide",
-    kinds: ["approval"],
-    title: () => "Waiting for your decision",
-    hint: (a) => `${a} wants to take an action on these and needs a yes or no.`,
-    tone: "accent",
-    action: () => "Review",
-  },
-  {
-    id: "late",
-    kinds: ["sla_breached", "sla_soon"],
-    title: () => "Waiting for a first reply",
-    hint: () => "Nobody has answered these customers yet, and the first-reply target has passed or is close.",
-    tone: "warn",
-    action: (i) => (i.draft ? "Review draft" : "Reply"),
-  },
-  {
-    id: "handoff",
-    kinds: ["escalated", "ai_error"],
-    title: (a) => `Handed off by ${a}`,
-    hint: (a) => `${a} wasn't confident enough to answer these on its own, or ran into an error.`,
-    tone: "warn",
-    action: () => "Take over",
-  },
-  {
-    id: "mine",
-    kinds: ["mine_waiting"],
-    title: () => "Assigned to you",
-    hint: () => "Customers waiting on your reply.",
-    tone: "plain",
-    action: (i) => (i.draft ? "Review draft" : "Reply"),
-  },
-  {
-    id: "unowned",
-    kinds: ["urgent_unassigned"],
-    title: () => "High priority, nobody on it",
-    hint: () => "Pick one up or assign it to someone.",
-    tone: "plain",
-    action: () => "Pick up",
-  },
-  {
-    id: "drafts",
-    kinds: ["draft_ready"],
-    title: () => "Drafts ready to send",
-    hint: (a) => `${a} wrote a reply for each of these. Check it, edit if needed, and send.`,
-    tone: "accent",
-    action: () => "Review draft",
-  },
+/** In order of urgency; a ticket is listed under the first section matching its top reason. */
+const SECTIONS: { id: string; label: string; kinds: NeedKind[] }[] = [
+  { id: "decide", label: "Approve or reject", kinds: ["approval"] },
+  { id: "late", label: "First reply overdue", kinds: ["sla_breached", "sla_soon"] },
+  { id: "handoff", label: "Handed off", kinds: ["escalated", "ai_error"] },
+  { id: "mine", label: "Assigned to you", kinds: ["mine_waiting"] },
+  { id: "unowned", label: "High priority, unassigned", kinds: ["urgent_unassigned"] },
+  { id: "drafts", label: "Drafts to send", kinds: ["draft_ready"] },
 ];
 
-function laneOf(i: NeedItem) {
-  return LANES.find((l) => l.kinds.includes(i.kinds[0]!)) ?? LANES[LANES.length - 1]!;
-}
-
 function HomeLayout({ data }: { data: HomeData }) {
-  const lanes = React.useMemo(() => {
+  const { slug } = useWorkspace();
+  // Unread tickets are listed under New (with their signals), so every ticket appears exactly once.
+  const needs = React.useMemo(() => new Map(data.needs.items.map((i) => [i.ticketId, i])), [data.needs.items]);
+  const sections = React.useMemo(() => {
+    const fresh = new Set(data.fresh.map((t) => t.id));
     const by = new Map<string, NeedItem[]>();
     for (const i of data.needs.items) {
-      const l = laneOf(i);
-      by.set(l.id, [...(by.get(l.id) ?? []), i]);
+      if (fresh.has(i.ticketId)) continue;
+      const s = SECTIONS.find((x) => x.kinds.includes(i.kinds[0]!)) ?? SECTIONS.at(-1)!;
+      by.set(s.id, [...(by.get(s.id) ?? []), i]);
     }
-    return LANES.map((l) => ({ lane: l, items: by.get(l.id) ?? [] })).filter((x) => x.items.length);
-  }, [data.needs.items]);
+    return SECTIONS.map((s) => ({ ...s, items: by.get(s.id) ?? [] })).filter((s) => s.items.length);
+  }, [data.needs.items, data.fresh]);
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto flex min-h-full max-w-[1320px] min-w-0 flex-col">
-        <Headline data={data} lanes={lanes} />
+      <div className="flex min-h-full min-w-0 flex-col">
+        <Header data={data} sections={sections} />
         <Surging topics={data.hot} />
-        <div className="grid flex-1 xl:grid-cols-[minmax(0,1fr)_300px]">
+        <div className="grid flex-1 xl:grid-cols-[minmax(0,1fr)_288px]">
           <div className="flex min-w-0 flex-col xl:border-r xl:border-line">
-            {lanes.length ? (
-              lanes.map(({ lane, items }) => <LaneSection key={lane.id} lane={lane} items={items} />)
-            ) : (
-              <AllClear data={data} />
-            )}
+            <Fresh items={data.fresh} needs={needs} />
+            {sections.map((s) => (
+              <Section key={s.id} label={s.label} items={s.items} />
+            ))}
+            {!sections.length && !data.fresh.length ? (
+              <p className="px-4 py-12 font-mono text-[12px] text-dim md:px-10">
+                Nothing needs a person right now. New tickets show up here the moment they do.
+              </p>
+            ) : null}
             {data.needs.total > data.needs.items.length ? (
-              <MoreInInbox n={data.needs.total - data.needs.items.length} />
+              <Link
+                to="/w/$slug/inbox/$view"
+                params={{ slug, view: "inbox" }}
+                className="px-4 py-4 font-mono text-[11.5px] text-dim hover:text-fg md:px-10"
+              >
+                +{data.needs.total - data.needs.items.length} more in the inbox →
+              </Link>
             ) : null}
           </div>
-          <LastDay data={data} />
+          <aside className="border-t border-line xl:border-t-0">
+            <LastDay data={data} />
+          </aside>
         </div>
       </div>
     </div>
   );
 }
 
-/* ------------------------------------------------------------------ headline */
+/* ------------------------------------------------------------------ header */
 
-function Headline({ data, lanes }: { data: HomeData; lanes: { lane: Lane; items: NeedItem[] }[] }) {
-  const { slug, boot } = useWorkspace();
+function Header({ data, sections }: { data: HomeData; sections: { id: string; label: string; items: NeedItem[] }[] }) {
+  const { slug } = useWorkspace();
   const navigate = useNavigate();
-  const agent = boot.settings.ai.agentName;
-  const total = data.needs.total;
-  const top = data.needs.items[0];
-  const count = (id: string) => lanes.find((l) => l.lane.id === id)?.items.length ?? 0;
-
+  const top = data.fresh[0]?.number ?? data.needs.items[0]?.number;
   const start = React.useCallback(() => {
-    if (top)
-      navigate({ to: "/w/$slug/inbox/$view/$ticket", params: { slug, view: "inbox", ticket: String(top.number) } });
+    if (top) navigate({ to: "/w/$slug/inbox/$view/$ticket", params: { slug, view: "inbox", ticket: String(top) } });
   }, [navigate, slug, top]);
-  // ↵ anywhere on Home starts triage (unless you're typing or a dialog is open).
+  // ↵ anywhere on Home opens the first ticket (unless you're typing or a dialog is open).
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Enter" || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
@@ -162,47 +116,37 @@ function Headline({ data, lanes }: { data: HomeData; lanes: { lane: Lane; items:
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [start]);
-
-  // One sentence per lane that has something, most urgent first.
-  const parts = [
-    count("decide") && `${plural(count("decide"), "action")} waiting for your approval`,
-    count("late") && `${plural(count("late"), "customer")} still without a first reply`,
-    count("handoff") && `${count("handoff")} handed off by ${agent}`,
-    count("mine") && `${count("mine")} assigned to you`,
-    count("unowned") && `${count("unowned")} high priority with nobody on it`,
-    count("drafts") && `${plural(count("drafts"), "draft")} ready to send`,
-  ].filter(Boolean) as string[];
-
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-
+  const fresh = data.fresh.length;
+  const total = data.needs.total;
   return (
-    <section className="flex flex-col gap-5 border-b border-line px-4 pt-8 pb-7 md:flex-row md:items-end md:justify-between md:px-10 md:pt-10">
+    <section className="flex flex-wrap items-end justify-between gap-4 border-b border-line px-4 pt-7 pb-5 md:px-10">
       <div className="flex min-w-0 flex-col gap-2">
-        <span className="text-[12.5px] text-muted">
-          {greeting} · {new Date().toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" })}
-        </span>
-        <h1 className="text-[24px] leading-tight font-semibold tracking-[-0.4px] text-fg">
-          {total ? `${plural(total, "ticket")} ${total === 1 ? "needs" : "need"} a person` : "You're all caught up"}
+        <h1 className="text-[17px] font-semibold tracking-[-0.2px] text-fg">
+          {fresh ? (
+            <>
+              <span className="text-accent-text">{fresh} unread</span>
+              <span className="text-dim"> · </span>
+            </>
+          ) : null}
+          {total ? `${total} need${total === 1 ? "s" : ""} you` : fresh ? "nothing else waiting" : "All clear"}
         </h1>
-        <p className="max-w-[720px] text-[13.5px] leading-relaxed text-body">
-          {parts.length
-            ? `${parts.slice(0, -1).join(", ")}${parts.length > 1 ? " and " : ""}${parts.at(-1)}.`
-            : `Nothing is waiting on your team. ${agent} keeps working new conversations as they come in.`}
-        </p>
+        {sections.length ? (
+          <div className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-[11.5px] text-dim">
+            {sections.map((s) => (
+              <a key={s.id} href={`#${s.id}`} className="hover:text-fg">
+                {s.label.toLowerCase()} <span className="text-fg-2">{s.items.length}</span>
+              </a>
+            ))}
+          </div>
+        ) : null}
       </div>
       {top ? (
-        <div className="flex shrink-0 flex-col items-start gap-1.5 md:items-end">
-          <button
-            onClick={start}
-            className="flex items-center gap-2.5 bg-fg px-3.5 py-2 text-[13px] font-medium text-[#080808] hover:bg-white"
-          >
-            Start with the most urgent <span className="font-mono text-[11px] text-[#55555f]">↵</span>
-          </button>
-          <span className="max-w-[300px] truncate text-[11.5px] text-dim">
-            #{top.number} · {top.subject}
-          </span>
-        </div>
+        <button
+          onClick={start}
+          className="flex items-center gap-2.5 bg-fg px-3 py-1.5 text-[12.5px] font-medium text-[#080808] hover:bg-white"
+        >
+          Start triage <span className="font-mono text-[11px] text-[#55555f]">↵</span>
+        </button>
       ) : null}
     </section>
   );
@@ -218,229 +162,250 @@ function Surging({ topics }: { topics: HotTopic[] }) {
     <Link
       to="/w/$slug/insights"
       params={{ slug }}
-      className="flex items-center gap-2.5 border-b border-line bg-warn/[0.05] px-4 py-2.5 text-[12.5px] text-body hover:text-fg md:px-10"
+      className="flex items-center gap-2.5 border-b border-line bg-warn/[0.05] px-4 py-2 text-[12.5px] text-body hover:text-fg md:px-10"
     >
       <TrendingUp className="size-3.5 shrink-0 text-warn" />
       <span className="truncate">
         <span className="text-fg-2">{name}</span> is surging: {top.recent} in the last 24h, usually{" "}
         {top.baseline < 1 ? "under 1" : Math.round(top.baseline)} a day
-        {topics.length > 1 ? ` · ${topics.length - 1} more topic${topics.length > 2 ? "s" : ""} above usual` : ""}
       </span>
-      <span className="ml-auto shrink-0 text-[11.5px] text-dim">Insights →</span>
+      <span className="ml-auto shrink-0 font-mono text-[11px] text-dim">insights →</span>
     </Link>
   );
 }
 
-/* ------------------------------------------------------------------ a lane */
+/* ------------------------------------------------------------------ rows */
 
-const LANE_LIMIT = 5;
-
-function LaneSection({ lane, items }: { lane: Lane; items: NeedItem[] }) {
-  const { boot } = useWorkspace();
-  const [all, setAll] = React.useState(false);
-  const agent = boot.settings.ai.agentName;
-  const shown = all ? items : items.slice(0, LANE_LIMIT);
+function SectionHead({ id, label, n, right }: { id?: string; label: string; n: number; right?: React.ReactNode }) {
   return (
-    <section className="flex flex-col border-b border-line">
-      <header className="flex items-start gap-3 px-4 pt-6 pb-3 md:px-10">
-        <span className={cn("mt-[7px] size-2 shrink-0", toneDot[lane.tone])} aria-hidden />
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <h2 className="text-[14px] font-semibold text-fg">
-            {lane.title(agent)} <span className="ml-1 font-normal text-dim tabular-nums">{items.length}</span>
-          </h2>
-          <p className="text-[12.5px] text-muted">{lane.hint(agent)}</p>
-        </div>
-      </header>
-      <ol className="flex flex-col pb-3">
-        {shown.map((i) => (
-          <NeedRow key={i.ticketId} item={i} lane={lane} />
-        ))}
-      </ol>
-      {items.length > LANE_LIMIT ? (
-        <button
-          onClick={() => setAll(!all)}
-          className="mb-4 self-start px-4 text-[12px] text-muted hover:text-fg md:px-10"
-        >
-          {all ? "Show fewer" : `Show ${items.length - LANE_LIMIT} more`}
-        </button>
-      ) : null}
-    </section>
+    <div id={id} className="flex h-10 scroll-mt-2 items-center justify-between gap-4 px-4 md:px-10">
+      <h2 className="font-mono text-[11px] font-medium tracking-[0.14em] text-fg-2 uppercase">
+        {label} <span className="ml-1 text-dim">{n}</span>
+      </h2>
+      {right}
+    </div>
   );
 }
 
-/** What the AI already did on this ticket, in a few words. */
-function aiLine(i: NeedItem, agent: string): { text: string; tone: Tone } | null {
-  if (i.approval) return { text: `${agent} wants to: ${i.approval.title}`, tone: "accent" };
-  if (i.kinds.includes("ai_error")) return { text: `${agent} failed, open to retry`, tone: "danger" };
-  if (i.kinds.includes("escalated")) {
-    const why = [i.aiSentiment, i.aiIntent && humanize(i.aiIntent)].filter(Boolean).join(", ");
-    return { text: why ? `Handed off · ${why}` : "Handed off", tone: "warn" };
-  }
-  if (i.draft) return { text: `Draft ready · ${Math.round(i.draft.confidence * 100)}% confident`, tone: "accent" };
-  return null;
-}
-
-function waitLine(i: NeedItem): { text: string; tone: Tone } {
-  const waited = ago(i.waitingSince);
-  const due = i.firstResponseDueAt ? new Date(i.firstResponseDueAt).getTime() : null;
-  if (i.kinds.includes("sla_breached") && due) return { text: `Waiting ${waited} · overdue`, tone: "warn" };
-  if (i.kinds.includes("sla_soon") && due) {
-    const m = Math.max(1, Math.round((due - Date.now()) / 60_000));
-    return { text: `Reply due in ${m < 60 ? `${m}m` : `${Math.round(m / 60)}h`}`, tone: "warn" };
-  }
-  return { text: waited === "now" ? "Just arrived" : `Waiting ${waited}`, tone: "plain" };
-}
-
-function NeedRow({ item: i, lane }: { item: NeedItem; lane: Lane }) {
-  const { slug, boot } = useWorkspace();
-  const agent = boot.settings.ai.agentName;
-  const name = i.customerName ?? i.customerEmail ?? "Unknown visitor";
-  const wait = waitLine(i);
-  const ai = aiLine(i, agent);
-  const about = i.preview || i.aiSummary;
-  const high = i.priority === "high" || i.priority === "urgent";
+/** One line per ticket: marker · customer · subject — latest message · signal · time. */
+function Row({
+  to,
+  ticketId,
+  unread,
+  customer,
+  subject,
+  preview,
+  signal,
+  time,
+  timeTone,
+}: {
+  to: number;
+  ticketId: string;
+  unread: boolean;
+  customer: string;
+  subject: string;
+  preview: string | null;
+  signal?: React.ReactNode;
+  time: string;
+  timeTone?: "warn" | "accent";
+}) {
+  const { slug } = useWorkspace();
+  const fresh = useJustArrived(ticketId);
   return (
     <li>
       <Link
         to="/w/$slug/inbox/$view/$ticket"
-        params={{ slug, view: "inbox", ticket: String(i.number) }}
-        className="group mx-2 flex items-start gap-3.5 px-2 py-3 hover:bg-white/[0.03] md:mx-8"
+        params={{ slug, view: "inbox", ticket: String(to) }}
+        className={cn(
+          "flex h-10 items-center gap-3 border-t border-line-2 pr-4 pl-2 hover:bg-white/[0.03] md:pr-10 md:pl-8",
+          fresh && "arrive",
+        )}
       >
-        <Avatar name={name} size={32} tone="neutral" className="mt-0.5" />
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <div className="flex min-w-0 items-baseline gap-2">
-            <span className="truncate text-[13.5px] font-medium text-fg">{i.subject}</span>
-            {high ? (
-              <span
-                className={cn(
-                  "shrink-0 text-[11px] font-semibold tracking-wide uppercase",
-                  i.priority === "urgent" ? "text-danger" : "text-warn",
-                )}
-              >
-                {i.priority}
-              </span>
-            ) : null}
-          </div>
-          <span className="truncate text-[12px] text-muted">
-            {name}
-            {i.customerCompany ? ` · ${i.customerCompany}` : ""} · #{i.number} via {i.channel}
-            {i.assigneeName ? ` · ${i.assigneeName}` : ""}
-          </span>
-          {about ? <p className="line-clamp-1 text-[12.5px] leading-relaxed text-faint">“{about}”</p> : null}
-          <div className="flex flex-wrap gap-x-3 gap-y-1 pt-0.5 sm:hidden">
-            <StatusDot tone={wait.tone}>{wait.text}</StatusDot>
-            {ai ? <StatusDot tone={ai.tone}>{ai.text}</StatusDot> : null}
-          </div>
-        </div>
-        <div className="flex shrink-0 flex-col items-end gap-1.5 pt-0.5 max-sm:hidden">
-          <StatusDot tone={wait.tone}>{wait.text}</StatusDot>
-          {ai ? (
-            <StatusDot tone={ai.tone} className="max-w-[260px] truncate">
-              {ai.text}
-            </StatusDot>
+        <span className="flex w-2.5 shrink-0 justify-center">
+          {unread ? <span className="size-1.5 bg-accent" aria-label="Unread" /> : null}
+        </span>
+        <span
+          className={cn(
+            "w-[150px] shrink-0 truncate text-[13px] max-sm:w-[104px]",
+            unread ? "font-semibold text-fg" : "text-body",
+          )}
+        >
+          {customer}
+        </span>
+        <span className="min-w-0 flex-1 truncate text-[13px]">
+          <span className={unread ? "font-medium text-fg-2" : "text-fg-3"}>{subject}</span>
+          {preview && !preview.startsWith(subject.replace(/…$/, "")) ? (
+            <span className="text-faint max-md:hidden"> — {preview}</span>
           ) : null}
-        </div>
-        <span className="flex w-[118px] shrink-0 items-center justify-end gap-1.5 self-center text-[12px] font-medium text-muted group-hover:text-fg max-md:hidden">
-          {lane.action(i)} <ArrowRight className="size-3.5" />
+        </span>
+        {signal ? <span className="flex shrink-0 items-center gap-1.5 max-sm:hidden">{signal}</span> : null}
+        <span
+          className={cn(
+            "w-[64px] shrink-0 text-right font-mono text-[11px] tabular-nums",
+            timeTone === "warn" ? "text-warn" : timeTone === "accent" ? "text-accent-text" : "text-dim",
+          )}
+        >
+          {fresh ? "new" : time}
         </span>
       </Link>
     </li>
   );
 }
 
-function MoreInInbox({ n }: { n: number }) {
-  const { slug } = useWorkspace();
-  return (
-    <Link
-      to="/w/$slug/inbox/$view"
-      params={{ slug, view: "inbox" }}
-      className="px-4 py-4 text-[12.5px] text-muted hover:text-fg md:px-10"
-    >
-      {plural(n, "more ticket")} {n === 1 ? "needs" : "need"} you · open the inbox →
-    </Link>
-  );
-}
-
-function AllClear({ data }: { data: HomeData }) {
+/** Customer messages you haven't seen yet, newest first: the first thing you see when you come back. */
+function Fresh({ items, needs }: { items: TicketListItem[]; needs: Map<string, NeedItem> }) {
   const { boot } = useWorkspace();
-  const t = data.pulse.tickets;
+  const { api, wid } = useWorkspace();
+  const qc = useQueryClient();
+  const readAll = useMutation({
+    mutationFn: () => api("/unread/read-all", { method: "POST" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["home", wid] });
+      qc.invalidateQueries({ queryKey: qk.unread(wid) });
+      qc.invalidateQueries({ queryKey: qk.counts(wid) });
+      qc.invalidateQueries({ queryKey: ["tickets", wid] });
+    },
+  });
+  if (!items.length) return null;
   return (
-    <div className="flex flex-col items-start gap-3 px-4 py-12 md:px-10">
-      <CircleCheck className="size-5 text-ok" />
-      <p className="max-w-[520px] text-[13.5px] leading-relaxed text-body">
-        No approvals, late replies or hand-offs.{" "}
-        {t.resolvedByAi24h
-          ? `${boot.settings.ai.agentName} resolved ${plural(t.resolvedByAi24h, "ticket")} on its own in the last 24 hours.`
-          : "New conversations show up here the moment they need a person."}
-      </p>
-    </div>
+    <section className="border-b border-line bg-accent/[0.03] pb-1">
+      <SectionHead
+        label="Unread"
+        n={items.length}
+        right={
+          <button
+            onClick={() => readAll.mutate()}
+            disabled={readAll.isPending}
+            className="font-mono text-[11px] text-dim hover:text-fg"
+          >
+            mark all read
+          </button>
+        }
+      />
+      <ol>
+        {items.map((t) => {
+          const need = needs.get(t.id);
+          const due = need ? dueOf(need) : null;
+          return (
+            <Row
+              key={t.id}
+              to={t.number}
+              ticketId={t.id}
+              unread
+              customer={t.customer?.name ?? t.customer?.email ?? "Unknown visitor"}
+              subject={t.subject}
+              preview={t.preview}
+              signal={need ? <Signal item={need} agent={boot.settings.ai.agentName} /> : undefined}
+              time={due?.time ?? ago(t.lastCustomerMessageAt ?? t.lastMessageAt)}
+              timeTone={due ? "warn" : "accent"}
+            />
+          );
+        })}
+      </ol>
+    </section>
   );
 }
 
-/* ------------------------------------------------------------------ last 24 hours */
+const LIMIT = 6;
 
-function compactDuration(seconds: number) {
-  const m = Math.round(seconds / 60);
-  if (m < 1) return `${Math.round(seconds)}s`;
-  if (m < 60) return `${m}m`;
-  const h = Math.floor(m / 60);
-  return h < 24 ? (m % 60 ? `${h}h ${m % 60}m` : `${h}h`) : `${Math.floor(h / 24)}d ${h % 24}h`;
+/** The first-reply deadline, when it's passed or close: "8d late", "due 25m". */
+function dueOf(i: NeedItem) {
+  if (i.kinds.includes("sla_breached")) return { time: `${ago(i.firstResponseDueAt)} late` };
+  if (i.kinds.includes("sla_soon") && i.firstResponseDueAt) return { time: `due ${until(i.firstResponseDueAt)}` };
+  return null;
 }
 
-function LastDay({ data }: { data: HomeData }) {
-  const { slug, boot } = useWorkspace();
-  const t = data.pulse.tickets;
-  const ai = data.pulse.ai;
+/** "25m" until a moment in the future. */
+function until(iso: string) {
+  const m = Math.max(1, Math.round((new Date(iso).getTime() - Date.now()) / 60_000));
+  return m < 60 ? `${m}m` : `${Math.round(m / 60)}h`;
+}
+
+function Section({ label, items }: { label: string; items: NeedItem[] }) {
+  const { boot } = useWorkspace();
+  const [all, setAll] = React.useState(false);
   const agent = boot.settings.ai.agentName;
-  const delta = t.new24h - t.newPrev24h;
-  const rows: { label: string; value: React.ReactNode; note?: string }[] = [
-    {
-      label: "New tickets",
-      value: t.new24h,
-      note: delta ? `${delta > 0 ? "+" : ""}${delta} vs the day before` : "same as the day before",
-    },
-    {
-      label: "Resolved",
-      value: t.resolved24h,
-      note: t.resolvedByAi24h ? `${t.resolvedByAi24h} by ${agent}` : undefined,
-    },
-    {
-      label: "First reply, median",
-      value:
-        data.pulse.medianFirstResponseSeconds != null ? compactDuration(data.pulse.medianFirstResponseSeconds) : "–",
-    },
-    { label: `Replies sent by ${agent}`, value: ai.autoReplies },
-    { label: "Waiting on customers", value: t.pending },
-  ];
+  const id = SECTIONS.find((s) => s.label === label)?.id;
+  const shown = all ? items : items.slice(0, LIMIT);
   return (
-    <aside className="flex flex-col border-t border-line xl:border-t-0">
-      <div className="flex items-center justify-between px-4 pt-6 pb-2 md:px-10 xl:px-6">
-        <h2 className="text-[13px] font-semibold text-fg-2">Last 24 hours</h2>
-        <Link to="/w/$slug/insights" params={{ slug }} className="text-[12px] text-muted hover:text-fg">
-          Insights →
-        </Link>
-      </div>
-      <dl className="grid grid-cols-2 px-4 pb-6 sm:grid-cols-3 md:px-10 xl:grid-cols-1 xl:px-6">
-        {rows.map((r) => (
-          <div key={r.label} className="flex flex-col gap-0.5 border-b border-line-2 py-3 last:border-b-0">
-            <dt className="text-[12px] text-muted">{r.label}</dt>
-            <dd className="flex items-baseline gap-2">
-              <span className="text-[18px] font-medium text-fg tabular-nums">{r.value}</span>
-              {r.note ? <span className="text-[11.5px] text-dim">{r.note}</span> : null}
-            </dd>
-          </div>
-        ))}
-      </dl>
-      {ai.worked ? (
-        <p className="mx-4 mb-6 flex gap-2 border border-accent/20 bg-accent/[0.05] p-3 text-[12px] leading-relaxed text-body md:mx-10 xl:mx-6">
-          <Sparkles className="mt-0.5 size-3.5 shrink-0 text-accent-text" />
-          <span>
-            {agent} worked {plural(ai.worked, "ticket")}
-            {ai.drafted ? `, drafted ${plural(ai.drafted, "reply", "replies")}` : ""}
-            {ai.avgConfidence != null ? ` at ${Math.round(ai.avgConfidence * 100)}% confidence on average` : ""}.
-          </span>
-        </p>
+    <section className="border-b border-line pb-1">
+      <SectionHead id={id} label={label} n={items.length} />
+      <ol>
+        {shown.map((i) => {
+          const due = dueOf(i);
+          return (
+            <Row
+              key={i.ticketId}
+              to={i.number}
+              ticketId={i.ticketId}
+              unread={i.unread}
+              customer={i.customerName ?? i.customerEmail ?? "Unknown visitor"}
+              subject={i.subject}
+              preview={i.preview}
+              signal={<Signal item={i} agent={agent} />}
+              time={due?.time ?? ago(i.waitingSince)}
+              timeTone={due ? "warn" : undefined}
+            />
+          );
+        })}
+      </ol>
+      {items.length > LIMIT ? (
+        <button
+          onClick={() => setAll(!all)}
+          className="px-4 py-2 font-mono text-[11px] text-dim hover:text-fg md:pl-[54px]"
+        >
+          {all ? "show fewer" : `+${items.length - LIMIT} more`}
+        </button>
       ) : null}
-    </aside>
+    </section>
+  );
+}
+
+/** What the AI did, as one icon and a few mono characters. */
+function Signal({ item: i, agent }: { item: NeedItem; agent: string }) {
+  const high = i.priority === "high" || i.priority === "urgent";
+  const prio = high ? (
+    <span
+      className={cn(
+        "font-mono text-[10.5px] font-semibold tracking-[0.08em] uppercase",
+        i.priority === "urgent" ? "text-danger" : "text-warn",
+      )}
+    >
+      {i.priority}
+    </span>
+  ) : null;
+  let ai: React.ReactNode = null;
+  if (i.approval)
+    ai = (
+      <span className="flex items-center gap-1 font-mono text-[11px] text-warn" title={i.approval.title}>
+        <Hand className="size-3" /> approve
+      </span>
+    );
+  else if (i.kinds.includes("ai_error"))
+    ai = (
+      <span className="flex items-center gap-1 font-mono text-[11px] text-danger">
+        <AlertTriangle className="size-3" /> failed
+      </span>
+    );
+  else if (i.kinds.includes("escalated"))
+    ai = (
+      <span className="flex items-center gap-1 font-mono text-[11px] text-warn" title={`Handed off by ${agent}`}>
+        <UserRoundCheck className="size-3" /> handed off
+      </span>
+    );
+  else if (i.draft)
+    ai = (
+      <span
+        className="flex items-center gap-1 font-mono text-[11px] text-accent-text"
+        title={`${agent} drafted a reply`}
+      >
+        <PenLine className="size-3" /> {Math.round(i.draft.confidence * 100)}%
+      </span>
+    );
+  return (
+    <>
+      {prio}
+      {ai}
+    </>
   );
 }

@@ -1,7 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, Outlet, useNavigate, useParams } from "@tanstack/react-router";
 import {
+  AlertTriangle,
   ArrowDownUp,
+  ArrowUp,
+  Clock,
+  Hand,
+  PenLine,
+  UserRoundCheck,
   Inbox as InboxIcon,
   LifeBuoy,
   Mail,
@@ -14,21 +20,10 @@ import {
   X,
 } from "lucide-react";
 import { DiscordIcon, SlackIcon } from "@/components/brand-icons";
-import { aiTagOf, turnOf } from "@/lib/ticket-state";
+import { useJustArrived } from "@/lib/arrivals";
+import { turnOf } from "@/lib/ticket-state";
 import * as React from "react";
-import {
-  Avatar,
-  Empty,
-  Kbd,
-  Menu,
-  MenuContent,
-  MenuItem,
-  MenuLabel,
-  MenuTrigger,
-  Spinner,
-  StatusDot,
-  Tip,
-} from "@/components/ui";
+import { Avatar, Empty, Kbd, Menu, MenuContent, MenuItem, MenuLabel, MenuTrigger, Spinner, Tip } from "@/components/ui";
 import { ViewDialog } from "@/features/view-dialog";
 import type { TicketListItem } from "@/lib/types";
 import { ago, cn } from "@/lib/utils";
@@ -236,90 +231,119 @@ export function InboxPage() {
 }
 
 /**
- * One line of "who and what" (customer, subject), one line of the latest message with its author,
- * and one line of state: whose turn it is first, then the AI's part, then priority and assignee.
+ * Unread rows are bold with an accent marker; read rows step back. The right edge carries what matters at a
+ * glance as icons (AI draft, hand-off, priority, assignee) and the time, orange when the first reply is late.
  */
 function TicketRow({ t, active, view }: { t: TicketListItem; active: boolean; view: string }) {
   const { slug, boot } = useWorkspace();
-  const Channel = channelIcon[t.channel] ?? Mail;
+  const agent = boot.settings.ai.agentName;
+  const fresh = useJustArrived(t.id);
   const turn = turnOf(t);
-  const ai = aiTagOf(t.aiState, boot.settings.ai.agentName);
-  // Our turn and the customer spoke last: nobody has answered their latest message yet.
-  const unanswered = turn.who === "us" && t.lastAuthorType !== "agent" && t.lastAuthorType !== "ai";
   const name = t.customer?.name ?? t.customer?.email ?? "Unknown visitor";
-  const author = t.lastAuthorType === "agent" ? "Team" : t.lastAuthorType === "ai" ? boot.settings.ai.agentName : null;
-  const high = t.priority === "urgent" || t.priority === "high";
+  const author = t.lastAuthorType === "agent" ? "Team" : t.lastAuthorType === "ai" ? agent : null;
   return (
     <Link
       to="/w/$slug/inbox/$view/$ticket"
       params={{ slug, view, ticket: String(t.number) }}
       className={cn(
-        "relative flex gap-3 border-b border-line-2 px-3.5 py-3",
-        active ? "bg-white/[0.05]" : "hover:bg-white/[0.025]",
+        "relative flex gap-2 border-b border-line-2 py-2.5 pr-3.5 pl-2",
+        active ? "bg-white/[0.06]" : "hover:bg-white/[0.03]",
+        fresh && "arrive",
       )}
     >
-      {active ? <span className="absolute inset-y-0 left-0 w-[2px] bg-accent" /> : null}
-      <span className="relative mt-0.5 shrink-0">
-        <Avatar name={name} src={t.customer?.avatarUrl} size={30} tone="neutral" />
-        {unanswered ? (
-          <span
-            className={cn("absolute -top-0.5 -right-0.5 size-2 ring-2 ring-cell", turn.late ? "bg-warn" : "bg-accent")}
-            aria-label="Waiting for a reply"
-          />
-        ) : null}
+      {active ? <span className="absolute inset-y-0 left-0 w-[2px] bg-fg" /> : null}
+      <span className="flex w-2.5 shrink-0 justify-center pt-[6px]">
+        {t.unread ? <span className="size-1.5 bg-accent" aria-label="Unread" /> : null}
       </span>
-      <div className="flex min-w-0 flex-1 flex-col gap-[3px]">
-        <div className="flex items-baseline justify-between gap-2">
-          <span className={cn("truncate text-[13px]", unanswered ? "font-semibold text-fg" : "font-medium text-fg-3")}>
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <div className="flex items-center gap-2">
+          <span className={cn("min-w-0 flex-1 truncate text-[13px]", t.unread ? "font-semibold text-fg" : "text-body")}>
             {name}
           </span>
-          <Tip label={`${t.channel} · last message ${new Date(t.lastMessageAt).toLocaleString()}`}>
-            <span className="flex shrink-0 items-center gap-1.5 text-[11.5px] text-dim">
-              <Channel className="size-3" />
-              {ago(t.lastMessageAt)}
+          <RowSignals t={t} agent={agent} />
+          <Tip
+            label={
+              turn.late
+                ? `First reply ${ago(t.firstResponseDueAt)} overdue`
+                : new Date(t.lastMessageAt).toLocaleString()
+            }
+          >
+            <span
+              className={cn(
+                "shrink-0 font-mono text-[11px] tabular-nums",
+                fresh ? "text-accent-text" : turn.late ? "text-warn" : "text-dim",
+              )}
+            >
+              {fresh ? "new" : ago(t.lastMessageAt)}
             </span>
           </Tip>
         </div>
-        <div className={cn("truncate text-[12.5px] leading-[1.35]", unanswered ? "text-fg-2" : "text-fg-3")}>
+        <div className={cn("truncate text-[12.5px]", t.unread ? "font-medium text-fg-2" : "text-muted")}>
           {t.subject}
         </div>
-        {t.preview ? (
-          <div className="truncate text-[12px] leading-[1.4] text-faint">
-            {author ? <span className="text-muted">{author}: </span> : null}
+        {t.preview && (author || !t.preview.startsWith(t.subject.replace(/…$/, ""))) ? (
+          <div className={cn("truncate text-[12px]", t.unread ? "text-muted" : "text-faint")}>
+            {author ? <span className="font-mono text-[11px] text-dim">{author} › </span> : null}
             {t.preview}
           </div>
         ) : null}
-        <div className="flex items-center gap-3 pt-1">
-          {view === "resolved" && turn.who === "done" ? null : (
-            <StatusDot tone={turn.tone}>{turn.late ? `${turn.label} · late` : turn.label}</StatusDot>
-          )}
-          {ai && ai.label !== turn.label ? (
-            <StatusDot tone={ai.tone} pulse={ai.pulse}>
-              {ai.label}
-            </StatusDot>
-          ) : null}
-          <span className="ml-auto flex shrink-0 items-center gap-2">
-            {high ? (
-              <span
-                className={cn(
-                  "text-[11px] font-semibold tracking-wide uppercase",
-                  t.priority === "urgent" ? "text-danger" : "text-warn",
-                )}
-              >
-                {t.priority}
-              </span>
-            ) : null}
-            {t.assigneeName ? (
-              <Tip label={`Assigned to ${t.assigneeName}`}>
-                <span>
-                  <Avatar name={t.assigneeName} size={18} />
-                </span>
-              </Tip>
-            ) : null}
-          </span>
-        </div>
       </div>
     </Link>
+  );
+}
+
+/** Icons only, each with a tooltip: what the AI did, whether a person must step in, priority, owner. */
+function RowSignals({ t, agent }: { t: TicketListItem; agent: string }) {
+  const icons: { key: string; label: string; el: React.ReactNode }[] = [];
+  if (t.aiState === "draft_ready")
+    icons.push({
+      key: "draft",
+      label: `${agent} drafted a reply`,
+      el: <PenLine className="size-3 text-accent-text" />,
+    });
+  if (t.aiState === "processing")
+    icons.push({
+      key: "ai",
+      label: `${agent} is working on it`,
+      el: <Sparkles className="size-3 animate-pulse text-accent-text" />,
+    });
+  if (t.aiState === "awaiting_approval")
+    icons.push({ key: "approval", label: "Waiting for your approval", el: <Hand className="size-3 text-warn" /> });
+  if (t.aiState === "escalated")
+    icons.push({
+      key: "handoff",
+      label: `Handed off by ${agent}`,
+      el: <UserRoundCheck className="size-3 text-warn" />,
+    });
+  if (t.aiState === "error")
+    icons.push({
+      key: "error",
+      label: `${agent} failed on this`,
+      el: <AlertTriangle className="size-3 text-danger" />,
+    });
+  if (t.status === "pending")
+    icons.push({ key: "pending", label: "Waiting on the customer", el: <Clock className="size-3 text-dim" /> });
+  if (t.priority === "urgent" || t.priority === "high")
+    icons.push({
+      key: "prio",
+      label: `${t.priority} priority`,
+      el: <ArrowUp className={cn("size-3", t.priority === "urgent" ? "text-danger" : "text-warn")} />,
+    });
+  if (t.assigneeName)
+    icons.push({
+      key: "owner",
+      label: `Assigned to ${t.assigneeName}`,
+      el: <Avatar name={t.assigneeName} size={15} />,
+    });
+  if (!icons.length) return null;
+  return (
+    <span className="flex shrink-0 items-center gap-1.5">
+      {icons.map((i) => (
+        <Tip key={i.key} label={i.label}>
+          <span className="flex items-center">{i.el}</span>
+        </Tip>
+      ))}
+    </span>
   );
 }
 

@@ -750,3 +750,18 @@ export const portalSignIns = pgTable(
   },
   (t) => [index("portal_sign_ins_org_email_idx").on(t.orgId, t.email, t.createdAt)],
 );
+
+/** When each teammate last read each ticket: drives unread rows, the bell and arrival highlights. */
+export const ticketReads = pgTable(
+  "ticket_reads",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    ticketId: text("ticket_id")
+      .notNull()
+      .references(() => tickets.id, { onDelete: "cascade" }),
+    readAt: timestamp("read_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.ticketId] })],
+);

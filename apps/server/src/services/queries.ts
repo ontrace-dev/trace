@@ -1,6 +1,6 @@
 import { and, arrayOverlaps, count, desc, eq, ilike, inArray, isNull, lt, or, sql, type SQL } from "drizzle-orm";
 import { db } from "../db/index.ts";
-import { customers, drafts, messages, tickets, user, views } from "../db/schema.ts";
+import { customers, drafts, messages, ticketReads, tickets, user, views } from "../db/schema.ts";
 import { markdownToPlain } from "../lib/text.ts";
 import type { ViewFilters } from "../lib/types.ts";
 
@@ -21,6 +21,30 @@ export function systemViewFilters(view: SystemView, userId: string): ViewFilters
     default:
       return {};
   }
+}
+
+/**
+ * Unread for this teammate: an active ticket whose latest public message is from the customer, and that
+ * they haven't opened since that message arrived. Answered tickets aren't unread, even if never opened.
+ */
+export function unreadFor(userId: string) {
+  return sql<boolean>`(
+    ${tickets.lastCustomerMessageAt} is not null
+    and ${tickets.status} in ('open', 'pending')
+    and (select ${messages.authorType} from ${messages}
+         where ${messages.ticketId} = ${tickets.id} and ${messages.kind} = 'message'
+         order by ${messages.createdAt} desc limit 1) = 'customer'
+    and not exists (select 1 from ${ticketReads}
+         where ${ticketReads.ticketId} = ${tickets.id} and ${ticketReads.userId} = ${userId}
+           and ${ticketReads.readAt} >= ${tickets.lastCustomerMessageAt})
+  )`;
+}
+
+export async function markRead(userId: string, ticketId: string) {
+  await db
+    .insert(ticketReads)
+    .values({ userId, ticketId, readAt: new Date() })
+    .onConflictDoUpdate({ target: [ticketReads.userId, ticketReads.ticketId], set: { readAt: new Date() } });
 }
 
 export function filtersToWhere(orgId: string, f: ViewFilters, userId: string): SQL | undefined {
@@ -53,11 +77,12 @@ export async function listTickets(
   orgId: string,
   filters: ViewFilters,
   userId: string,
-  opts: { limit?: number; before?: Date } = {},
+  opts: { limit?: number; before?: Date; unreadOnly?: boolean } = {},
 ) {
   const where = and(
     filtersToWhere(orgId, filters, userId),
     opts.before ? lt(tickets.lastMessageAt, opts.before) : undefined,
+    opts.unreadOnly ? unreadFor(userId) : undefined,
   );
   const lastMessage = (col: typeof messages.body | typeof messages.authorType) =>
     db
@@ -94,6 +119,7 @@ export async function listTickets(
       preview: sql<string | null>`(${lastMessage(messages.body)})`,
       /** Who wrote the latest public message: whose turn it is at a glance. */
       lastAuthorType: sql<"customer" | "agent" | "ai" | "system" | null>`(${lastMessage(messages.authorType)})`,
+      unread: unreadFor(userId),
     })
     .from(tickets)
     .leftJoin(customers, eq(customers.id, tickets.customerId))
@@ -121,6 +147,11 @@ export async function sidebarCounts(orgId: string, userId: string) {
       out[v] = await countTickets(orgId, systemViewFilters(v, userId), userId);
     }),
   );
+  const [unread] = await db
+    .select({ n: count() })
+    .from(tickets)
+    .where(and(eq(tickets.orgId, orgId), unreadFor(userId)));
+  out.unread = unread?.n ?? 0;
   const vs = await db.select().from(views).where(eq(views.orgId, orgId));
   await Promise.all(
     vs.map(async (v) => {

@@ -25,6 +25,7 @@ import {
 import { env } from "../env.ts";
 import { bus, type BusEvent } from "../lib/bus.ts";
 import { badRequest, notFound } from "../lib/http.ts";
+import { markdownToPlain } from "../lib/text.ts";
 import { id, secretToken } from "../lib/ids.ts";
 import type {
   AiSettings,
@@ -41,6 +42,8 @@ import { enqueueAgent } from "../services/ai/queue.ts";
 import { handleInboundEmail } from "../services/email/inbound.ts";
 import {
   listTickets,
+  markRead,
+  unreadFor,
   pendingDraftFor,
   sidebarCounts,
   type SystemView,
@@ -133,6 +136,52 @@ w.get("/bootstrap", async (c) => {
 
 w.get("/counts", async (c) => c.json(await sidebarCounts(c.get("orgId"), c.get("user").id)));
 
+/** Conversations with a customer message you haven't seen yet (the bell), newest first. */
+w.get("/unread", async (c) => {
+  const rows = await listTickets(c.get("orgId"), { status: ["open", "pending"] }, c.get("user").id, {
+    limit: 30,
+    unreadOnly: true,
+  });
+  return c.json({ tickets: rows });
+});
+
+/** What a teammate sees in a toast when a customer writes: enough to decide whether to open it now. */
+async function arrivalFor(e: BusEvent) {
+  const isNew = e.type === "ticket.created";
+  const isReply = e.type === "message.created" && e.authorType === "customer" && e.kind === "message";
+  if (!isNew && !isReply) return null;
+  const [row] = await db
+    .select({
+      number: tickets.number,
+      subject: tickets.subject,
+      channel: tickets.channel,
+      customer: sql<string | null>`coalesce(${customers.name}, ${customers.email})`,
+      first: sql<{
+        id: string;
+        author: string;
+      } | null>`(select json_build_object('id', ${messages.id}, 'author', ${messages.authorType}) from ${messages} where ${messages.ticketId} = ${tickets.id} and ${messages.kind} = 'message' order by ${messages.createdAt} limit 1)`,
+      body: sql<
+        string | null
+      >`(select ${messages.body} from ${messages} where ${messages.ticketId} = ${tickets.id} and ${messages.kind} = 'message' order by ${messages.createdAt} desc limit 1)`,
+    })
+    .from(tickets)
+    .leftJoin(customers, eq(customers.id, tickets.customerId))
+    .where(eq(tickets.id, e.ticketId));
+  if (!row) return null;
+  // Tickets a teammate opens on a customer's behalf aren't news to anyone.
+  if (isNew && row.first?.author !== "customer") return null;
+  // A new ticket's opening message is announced by ticket.created already.
+  if (isReply && "messageId" in e && row.first?.id === e.messageId) return null;
+  return {
+    kind: isNew ? ("ticket" as const) : ("reply" as const),
+    number: row.number,
+    subject: row.subject,
+    channel: row.channel,
+    customer: row.customer,
+    preview: row.body ? markdownToPlain(row.body).slice(0, 140) : "",
+  };
+}
+
 /** The landing page: what needs a human, what's spiking, what the AI did, every queue at a glance. */
 w.get("/home", async (c) => c.json(await homeData(c.get("orgId"), c.get("user").id)));
 
@@ -168,7 +217,10 @@ w.get("/stream", (c) => {
         continue;
       }
       const batch = queue.splice(0, queue.length);
-      for (const e of batch) await stream.writeSSE({ event: "change", data: JSON.stringify(e) });
+      for (const e of batch) {
+        const arrival = await arrivalFor(e).catch(() => null);
+        await stream.writeSSE({ event: "change", data: JSON.stringify(arrival ? { ...e, arrival } : e) });
+      }
     }
     bus.off(`org:${orgId}`, onEvent);
   });
@@ -363,6 +415,22 @@ w.patch("/tickets/:id", async (c) => {
   }
   const t = await updateTicket(c.get("orgId"), c.req.param("id"), patch, actor(c));
   return c.json({ ticket: t });
+});
+
+w.post("/unread/read-all", async (c) => {
+  const uid = c.get("user").id;
+  const rows = await db
+    .select({ id: tickets.id })
+    .from(tickets)
+    .where(and(eq(tickets.orgId, c.get("orgId")), unreadFor(uid)));
+  await Promise.all(rows.map((r) => markRead(uid, r.id)));
+  return c.json({ ok: true, count: rows.length });
+});
+
+w.post("/tickets/:ref/read", async (c) => {
+  const t = await resolveTicket(c.get("orgId"), c.req.param("ref"));
+  await markRead(c.get("user").id, t.id);
+  return c.json({ ok: true });
 });
 
 w.post("/tickets/:id/messages", async (c) => {

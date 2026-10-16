@@ -1,7 +1,6 @@
 import { Dialog as D, DropdownMenu as DM, Popover as P, Select as SP, Switch as S, Tooltip as T } from "radix-ui";
 import { Check, ChevronDown, Loader2, X } from "lucide-react";
 import * as React from "react";
-import { type Tone as Tone2, toneDot, toneText } from "@/lib/ticket-state";
 import { cn, initials } from "@/lib/utils";
 
 /* ------------------------------------------------------------------ Button */
@@ -245,26 +244,6 @@ export function Badge({
         className,
       )}
     >
-      {children}
-    </span>
-  );
-}
-
-/** A quiet status: a small colored square and sentence-case text. For states, not for labels. */
-export function StatusDot({
-  tone,
-  pulse,
-  className,
-  children,
-}: {
-  tone: Tone2;
-  pulse?: boolean;
-  className?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <span className={cn("inline-flex items-center gap-1.5 text-[11.5px] whitespace-nowrap", toneText[tone], className)}>
-      <span className={cn("size-1.5 shrink-0", toneDot[tone], pulse && "animate-pulse")} aria-hidden />
       {children}
     </span>
   );

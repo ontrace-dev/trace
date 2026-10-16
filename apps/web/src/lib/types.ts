@@ -48,6 +48,8 @@ export interface TicketListItem {
   customer: { id: string; name: string | null; email: string | null; avatarUrl: string | null } | null;
   preview: string | null;
   lastAuthorType: "customer" | "agent" | "ai" | "system" | null;
+  /** A customer message you haven't opened yet. */
+  unread: boolean;
 }
 
 export interface Ticket {

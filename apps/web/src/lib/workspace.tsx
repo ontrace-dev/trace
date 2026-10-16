@@ -1,3 +1,4 @@
+import { type Arrival, pushArrival } from "./arrivals";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { wapi } from "./api";
@@ -24,6 +25,7 @@ export function useWorkspace() {
 export const qk = {
   boot: (wid: string) => ["boot", wid] as const,
   counts: (wid: string) => ["counts", wid] as const,
+  unread: (wid: string) => ["unread", wid] as const,
   tickets: (wid: string, view: string, q?: string) => ["tickets", wid, view, q ?? ""] as const,
   ticket: (wid: string, ref: string) => ["ticket", wid, ref] as const,
   customers: (wid: string, q?: string) => ["customers", wid, q ?? ""] as const,
@@ -81,7 +83,12 @@ export function WorkspaceProvider({ wid, slug, children }: { wid: string; slug: 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
-type ChangeEvent = { type: string; ticketId?: string; changes?: string[] };
+type ChangeEvent = {
+  type: string;
+  ticketId?: string;
+  changes?: string[];
+  arrival?: Omit<Arrival, "ticketId" | "at">;
+};
 
 /** Live updates over SSE: every change in the workspace invalidates the affected queries. */
 function useRealtime(wid: string) {
@@ -95,6 +102,7 @@ function useRealtime(wid: string) {
 
     const schedule = (e: ChangeEvent) => {
       if (e.ticketId) pending.add(e.ticketId);
+      if (e.arrival && e.ticketId) pushArrival({ ...e.arrival, ticketId: e.ticketId, at: Date.now() });
       if (e.type === "integration.updated") qc.invalidateQueries({ queryKey: qk.integrations(wid) });
       if (flush) return;
       flush = setTimeout(() => {
@@ -103,6 +111,7 @@ function useRealtime(wid: string) {
         pending = new Set();
         qc.invalidateQueries({ queryKey: ["tickets", wid] });
         qc.invalidateQueries({ queryKey: qk.counts(wid) });
+        qc.invalidateQueries({ queryKey: qk.unread(wid) });
         qc.invalidateQueries({ queryKey: ["home", wid] });
         qc.invalidateQueries({ queryKey: ["views-overview", wid] });
         // Ticket detail queries are keyed by id or number; refresh any that match.

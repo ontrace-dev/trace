@@ -42,6 +42,7 @@ import { SourceChips } from "@/features/source-chips";
 import { Composer, type ComposerHandle } from "@/features/ticket/composer";
 import { ContextPanel } from "@/features/ticket/context-panel";
 import { CreateIssueDialog } from "@/features/issues/create-issue";
+import { useMarkRead } from "@/features/notifications";
 import { FactChips } from "@/features/issues/ticket-fields";
 import { TraceAnalysis, TraceWaterfall } from "@/features/ticket/trace-view";
 import { useTicket, useTicketActions } from "@/features/ticket/use-ticket";
@@ -79,6 +80,7 @@ function TicketView({ data }: { data: TicketDetail }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [details]);
+  useMarkRead(ticket.id, messages.length);
   const ref = `${boot.settings.ticketPrefix}-${ticket.number}`;
   const latestTrace = data.traces[0];
   const Channel = channelIcon[ticket.channel];
@@ -341,23 +343,23 @@ const OURS = "@2xl:ml-16";
 const THEIRS = "@2xl:mr-16";
 
 const ROLE = {
-  customer: { card: "border-line bg-white/[0.025]", rail: "", tag: "Customer", tagTone: "text-muted" },
+  customer: { card: "border-line bg-white/[0.025]", rail: "", tag: "customer", tagTone: "text-dim" },
   agent: {
     card: "border-line-strong bg-raised",
     rail: "border-l-2 border-l-info/70",
-    tag: "Team reply",
+    tag: "reply",
     tagTone: "text-info",
   },
   ai: {
     card: "border-accent/25 bg-accent/[0.05]",
     rail: "border-l-2 border-l-accent",
-    tag: "AI reply",
+    tag: "ai reply",
     tagTone: "text-accent-text",
   },
   note: {
     card: "border-warn/25 bg-warn/[0.05]",
     rail: "border-l-2 border-l-warn/80",
-    tag: "Internal note",
+    tag: "internal note",
     tagTone: "text-warn",
   },
 } as const;
@@ -396,10 +398,11 @@ function MessageItem({ m }: { m: Message }) {
           <Avatar name={name} size={24} tone={isCustomer ? "neutral" : "accent"} />
         )}
         <span className="text-[13px] font-semibold text-fg">{name}</span>
-        <span className={cn("flex items-center gap-1 text-[11.5px]", role.tagTone)}>
+        <span
+          className={cn("flex items-center gap-1 font-mono text-[10.5px] tracking-[0.1em] uppercase", role.tagTone)}
+        >
           {isNote ? <Lock className="size-2.5" /> : null}
           {role.tag}
-          {isNote ? <span className="text-dim">· only your team sees this</span> : null}
         </span>
         {m.meta.via && m.meta.via !== "web" && m.meta.via !== "ai" ? (
           <span className="text-[11.5px] text-dim">via {m.meta.via}</span>
