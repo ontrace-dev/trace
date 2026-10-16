@@ -6,6 +6,7 @@
 - **Knowledge from everywhere.** Help articles plus synced sources — docs websites, Confluence, Jira, Notion, Zendesk Help Center and uploaded files — searched by meaning _and_ keywords with local multilingual embeddings.
 - **Test before you trust it.** Simulate any conversation against the real agent and run graded test suites before switching autopilot on.
 - **Every channel, one thread.** Email (SMTP, forwarding, or inbound webhooks), an embeddable chat widget, Slack and Discord (alerts, two-way thread sync, intake channels, `/trace`), and a REST API.
+- **A customer portal.** Customers see every request they ever opened, on any channel, and reply or open new ones. Hosted at `/portal/<workspace>`, or embedded in your own platform as a themeable `<trace-portal>` element.
 - **Workspaces.** Multi-tenant by design: invite your team, roles, per-workspace channels, AI settings and branding.
 - **Local first.** Postgres and Mailpit in docker-compose, no cloud account needed. Without an Anthropic key the agent runs on local heuristics.
 
@@ -104,6 +105,30 @@ Production options (Settings → Channels → Email): forward support@ to the ch
   Trace("identify", { email: "ana@acme.io", name: "Ana", userId: "u_123", userHash: "<hmac>" });
 </script>
 ```
+
+**Customer portal** — Settings → Customer portal. The hosted page lives at `/portal/<workspace>` (try http://localhost:3000/portal/northwind with `anna@northwind.io`; the sign-in link lands in Mailpit). Customers sign in with a one-time email link and see all their requests, open, awaiting their reply and solved, from every channel. Every email reply links to the request online. To put it inside your own product, embed the web component and sign your users in with the same identity secret as the widget:
+
+```html
+<trace-portal
+  workspace="acme"
+  user-email="ana@acme.io"
+  user-hash="<hmac-sha256 of the email>"
+  routing="hash"
+  hide-header
+></trace-portal>
+<script src="https://support.example.com/portal.js" async></script>
+<style>
+  trace-portal {
+    --trace-accent: #0f766e;
+    --trace-font: Inter, sans-serif;
+  }
+  trace-portal::part(ticket-row) {
+    padding-block: 18px;
+  }
+</style>
+```
+
+Theme it from settings, with attributes, with `--trace-*` CSS variables and `::part()` selectors, or with custom CSS. Listen for `trace:unauthenticated`, `trace:signin`, `trace:ticket-created` and more. To build a portal entirely your own, call its API (`/api/portal/<workspace>/…`, listed in the settings page) directly.
 
 **REST API** — create a key in Settings → API & keys:
 
@@ -239,9 +264,10 @@ apps/server     Hono API on Node — better-auth (organizations = workspaces), D
                 knowledge connectors, simulator + judge, inbound SMTP, email/Slack/Discord/webhook integrations, SSE
 apps/web        React 19 SPA — TanStack Router + Query, Tailwind v4, Radix, cmdk (built with Vite+)
 packages/widget Embeddable chat widget — vanilla TS, Shadow DOM, ~11 KB gzipped IIFE
+packages/portal Customer portal — the <trace-portal> web component (hosted page + embeds), ~15 KB gzipped IIFE
 ```
 
-Everything that happens is published on an in-process event bus; the browser (SSE), Slack, Discord, webhooks and the AI queue subscribe to it. Channels register a _deliverer_ that carries public replies back to the customer (SMTP, Slack/Discord thread, widget stream).
+Everything that happens is published on an in-process event bus; the browser (SSE), Slack, Discord, webhooks and the AI queue subscribe to it. Channels register a _deliverer_ that carries public replies back to the customer (SMTP, Slack/Discord thread, widget stream, portal notification email).
 
 Useful scripts: `vp run dev`, `vp run build`, `vp check`, `vp run db:generate` (after schema changes), `vp run db:migrate`, `vp run db:seed`.
 

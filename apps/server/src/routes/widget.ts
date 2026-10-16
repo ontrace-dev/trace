@@ -8,6 +8,7 @@ import { db } from "../db/index.ts";
 import { channels, messages, tickets } from "../db/schema.ts";
 import { env } from "../env.ts";
 import { bus, type BusEvent } from "../lib/bus.ts";
+import { originAllowed, rateLimit } from "../lib/guards.ts";
 import { secretToken } from "../lib/ids.ts";
 import { escapeHtml } from "../lib/text.ts";
 import { getClaude } from "../services/ai/client.ts";
@@ -66,49 +67,6 @@ function verifyUserHash(secret: string, subject: string, hash?: string) {
 }
 
 // ---------------------------------------------------------------- guards
-
-const buckets = new Map<string, { n: number; reset: number }>();
-setInterval(() => {
-  const now = Date.now();
-  for (const [k, b] of buckets) if (b.reset < now) buckets.delete(k);
-}, 60_000).unref();
-
-/** Fixed-window limiter per IP + widget key. */
-function rateLimit(c: Context, key: string, limit: number, scope: string) {
-  const ip =
-    c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ||
-    c.req.header("x-real-ip") ||
-    (c.env as { incoming?: { socket?: { remoteAddress?: string } } } | undefined)?.incoming?.socket?.remoteAddress ||
-    "unknown";
-  const id = `${scope}:${key}:${ip}`;
-  const now = Date.now();
-  const b = buckets.get(id);
-  if (!b || b.reset < now) {
-    buckets.set(id, { n: 1, reset: now + 60_000 });
-    return;
-  }
-  if (++b.n > limit) throw new HTTPException(429, { message: "Too many requests — slow down a little" });
-}
-
-function originAllowed(origin: string | undefined, allowed: string[]) {
-  if (!allowed.length || !origin) return true;
-  const own = [env.PUBLIC_URL, env.APP_URL].map((u) => new URL(u).origin);
-  if (own.includes(origin)) return true;
-  let host: string;
-  try {
-    host = new URL(origin).host;
-  } catch {
-    return false;
-  }
-  return allowed.some((raw) => {
-    const a = raw.trim().replace(/\/+$/, "");
-    if (!a) return false;
-    if (a === "*") return true;
-    if (a.startsWith("*.")) return host.endsWith(a.slice(1)) || host === a.slice(2);
-    if (a.includes("://")) return a === origin;
-    return a === host;
-  });
-}
 
 async function workspace(c: Context, opts: { limit?: number; scope?: string } = {}) {
   const key = c.req.param("key") ?? "";

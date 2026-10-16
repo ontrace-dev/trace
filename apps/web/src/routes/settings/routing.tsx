@@ -489,7 +489,7 @@ function PreviewBox() {
   );
 }
 
-const CHANNELS = ["email", "widget", "slack", "discord", "api", "web"];
+const CHANNELS = ["email", "widget", "portal", "slack", "discord", "api", "web"];
 const PRIORITIES = ["urgent", "high", "normal", "low"];
 const csv = (s: string) =>
   s

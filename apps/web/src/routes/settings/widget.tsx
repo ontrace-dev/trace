@@ -410,7 +410,15 @@ Trace("shutdown")                     // e.g. on logout
   );
 }
 
-function Group({ label, description, children }: { label: string; description?: string; children: React.ReactNode }) {
+export function Group({
+  label,
+  description,
+  children,
+}: {
+  label: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
   return (
     <section className="flex flex-col gap-4 border-b border-line px-8 py-6">
       <div className="flex flex-col gap-1">
@@ -422,7 +430,7 @@ function Group({ label, description, children }: { label: string; description?: 
   );
 }
 
-function Toggle({
+export function Toggle({
   label,
   description,
   checked,
@@ -444,7 +452,7 @@ function Toggle({
   );
 }
 
-function ColorInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+export function ColorInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [text, setText] = React.useState(value);
   React.useEffect(() => setText(value), [value]);
   return (
@@ -470,7 +478,7 @@ function ColorInput({ value, onChange }: { value: string; onChange: (v: string) 
   );
 }
 
-function Range({
+export function Range({
   value,
   min,
   max,

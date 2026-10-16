@@ -50,6 +50,8 @@ export interface NeedItem {
   assigneeName: string | null;
   customerName: string | null;
   customerEmail: string | null;
+  customerCompany: string | null;
+  preview: string | null;
   firstResponseDueAt: string | null;
   waitingSince: string;
   kinds: NeedKind[];

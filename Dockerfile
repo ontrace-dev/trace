@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# trace — single image with the API, the web app and the widget bundle.
+# trace — single image with the API, the web app and the widget and portal bundles.
 
 # --- build: the official Vite+ toolchain image -------------------------------
 FROM ghcr.io/voidzero-dev/vite-plus:latest AS build
@@ -8,6 +8,7 @@ COPY --chown=vp:vp package.json pnpm-lock.yaml pnpm-workspace.yaml .node-version
 COPY --chown=vp:vp apps/server/package.json apps/server/
 COPY --chown=vp:vp apps/web/package.json apps/web/
 COPY --chown=vp:vp packages/widget/package.json packages/widget/
+COPY --chown=vp:vp packages/portal/package.json packages/portal/
 RUN vp install --frozen-lockfile
 COPY --chown=vp:vp . .
 RUN vp run build
@@ -20,6 +21,7 @@ COPY --chown=vp:vp package.json pnpm-lock.yaml pnpm-workspace.yaml .node-version
 COPY --chown=vp:vp apps/server/package.json apps/server/
 COPY --chown=vp:vp apps/web/package.json apps/web/
 COPY --chown=vp:vp packages/widget/package.json packages/widget/
+COPY --chown=vp:vp packages/portal/package.json packages/portal/
 RUN vp install --frozen-lockfile --prod
 
 # --- runtime -------------------------------------------------------------------
@@ -36,6 +38,7 @@ COPY --from=build /app/apps/server/dist ./apps/server/dist
 COPY --from=build /app/apps/server/drizzle ./apps/server/drizzle
 COPY --from=build /app/apps/web/dist ./apps/web/dist
 COPY --from=build /app/packages/widget/dist ./packages/widget/dist
+COPY --from=build /app/packages/portal/dist ./packages/portal/dist
 RUN mkdir -p /app/.data && chown -R nobody /app/.data
 USER nobody
 EXPOSE 3000 2525

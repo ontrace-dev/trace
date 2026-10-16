@@ -14,6 +14,7 @@ export default defineConfig({
     proxy: {
       "/api": { target: api, changeOrigin: false },
       "/widget.js": { target: api },
+      "/portal.js": { target: api },
     },
   },
 });

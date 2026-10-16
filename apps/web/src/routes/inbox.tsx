@@ -3,6 +3,7 @@ import { Link, Outlet, useNavigate, useParams } from "@tanstack/react-router";
 import {
   ArrowDownUp,
   Inbox as InboxIcon,
+  LifeBuoy,
   Mail,
   MessageCircle,
   Pencil,
@@ -13,10 +14,10 @@ import {
   X,
 } from "lucide-react";
 import { DiscordIcon, SlackIcon } from "@/components/brand-icons";
+import { aiTagOf, turnOf } from "@/lib/ticket-state";
 import * as React from "react";
 import {
   Avatar,
-  Badge,
   Empty,
   Kbd,
   Menu,
@@ -25,6 +26,7 @@ import {
   MenuLabel,
   MenuTrigger,
   Spinner,
+  StatusDot,
   Tip,
 } from "@/components/ui";
 import { ViewDialog } from "@/features/view-dialog";
@@ -58,50 +60,8 @@ export const channelIcon = {
   discord: DiscordIcon,
   api: Webhook,
   web: Pencil,
+  portal: LifeBuoy,
 } as const;
-
-export function aiBadge(t: Pick<TicketListItem, "aiState" | "aiConfidence">) {
-  switch (t.aiState) {
-    case "draft_ready":
-      return (
-        <Badge tone="solid-accent" upper>
-          draft ready
-        </Badge>
-      );
-    case "processing":
-      return (
-        <Badge tone="solid-accent" upper className="animate-pulse">
-          thinking
-        </Badge>
-      );
-    case "auto_replied":
-      return (
-        <Badge tone="ok" upper>
-          ai replied
-        </Badge>
-      );
-    case "escalated":
-      return (
-        <Badge tone="warn" upper>
-          needs human
-        </Badge>
-      );
-    case "awaiting_approval":
-      return (
-        <Badge tone="warn" upper>
-          approval needed
-        </Badge>
-      );
-    case "error":
-      return (
-        <Badge tone="danger" upper>
-          ai error
-        </Badge>
-      );
-    default:
-      return null;
-  }
-}
 
 export function priorityTone(p: string) {
   return p === "urgent" ? "danger" : p === "high" ? "warn" : p === "low" ? "neutral" : "info";
@@ -275,49 +235,88 @@ export function InboxPage() {
   );
 }
 
+/**
+ * One line of "who and what" (customer, subject), one line of the latest message with its author,
+ * and one line of state: whose turn it is first, then the AI's part, then priority and assignee.
+ */
 function TicketRow({ t, active, view }: { t: TicketListItem; active: boolean; view: string }) {
-  const { slug } = useWorkspace();
+  const { slug, boot } = useWorkspace();
   const Channel = channelIcon[t.channel] ?? Mail;
-  const unread =
-    t.lastCustomerMessageAt &&
-    (!t.firstRespondedAt || t.lastCustomerMessageAt > t.firstRespondedAt) &&
-    t.status === "open";
-  const name = t.customer?.name ?? t.customer?.email ?? "Unknown";
+  const turn = turnOf(t);
+  const ai = aiTagOf(t.aiState, boot.settings.ai.agentName);
+  // Our turn and the customer spoke last: nobody has answered their latest message yet.
+  const unanswered = turn.who === "us" && t.lastAuthorType !== "agent" && t.lastAuthorType !== "ai";
+  const name = t.customer?.name ?? t.customer?.email ?? "Unknown visitor";
+  const author = t.lastAuthorType === "agent" ? "Team" : t.lastAuthorType === "ai" ? boot.settings.ai.agentName : null;
+  const high = t.priority === "urgent" || t.priority === "high";
   return (
     <Link
       to="/w/$slug/inbox/$view/$ticket"
       params={{ slug, view, ticket: String(t.number) }}
       className={cn(
-        "relative flex gap-2.5 border-b border-line px-3.5 py-3",
-        active ? "bg-white/[0.04]" : "hover:bg-white/[0.02]",
+        "relative flex gap-3 border-b border-line-2 px-3.5 py-3",
+        active ? "bg-white/[0.05]" : "hover:bg-white/[0.025]",
       )}
     >
       {active ? <span className="absolute inset-y-0 left-0 w-[2px] bg-accent" /> : null}
-      <Avatar name={name} src={t.customer?.avatarUrl} size={28} tone={active || unread ? "accent" : "neutral"} />
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <div className="flex items-center justify-between gap-2">
-          <span className={cn("truncate text-[13px] font-medium", unread || active ? "text-[#f4f4f8]" : "text-fg-3")}>
+      <span className="relative mt-0.5 shrink-0">
+        <Avatar name={name} src={t.customer?.avatarUrl} size={30} tone="neutral" />
+        {unanswered ? (
+          <span
+            className={cn("absolute -top-0.5 -right-0.5 size-2 ring-2 ring-cell", turn.late ? "bg-warn" : "bg-accent")}
+            aria-label="Waiting for a reply"
+          />
+        ) : null}
+      </span>
+      <div className="flex min-w-0 flex-1 flex-col gap-[3px]">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className={cn("truncate text-[13px]", unanswered ? "font-semibold text-fg" : "font-medium text-fg-3")}>
             {name}
           </span>
-          <span className="flex shrink-0 items-center gap-1.5 font-mono text-[11px] text-dim">
-            <Channel className="size-3" />
-            {ago(t.lastMessageAt)}
-          </span>
+          <Tip label={`${t.channel} · last message ${new Date(t.lastMessageAt).toLocaleString()}`}>
+            <span className="flex shrink-0 items-center gap-1.5 text-[11.5px] text-dim">
+              <Channel className="size-3" />
+              {ago(t.lastMessageAt)}
+            </span>
+          </Tip>
         </div>
-        <div className={cn("truncate text-[12px] leading-[1.4]", unread ? "text-fg-3" : "text-muted")}>{t.subject}</div>
-        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-          {t.priority === "urgent" || t.priority === "high" ? (
-            <Badge tone={priorityTone(t.priority)} upper>
-              {t.priority}
-            </Badge>
+        <div className={cn("truncate text-[12.5px] leading-[1.35]", unanswered ? "text-fg-2" : "text-fg-3")}>
+          {t.subject}
+        </div>
+        {t.preview ? (
+          <div className="truncate text-[12px] leading-[1.4] text-faint">
+            {author ? <span className="text-muted">{author}: </span> : null}
+            {t.preview}
+          </div>
+        ) : null}
+        <div className="flex items-center gap-3 pt-1">
+          {view === "resolved" && turn.who === "done" ? null : (
+            <StatusDot tone={turn.tone}>{turn.late ? `${turn.label} · late` : turn.label}</StatusDot>
+          )}
+          {ai && ai.label !== turn.label ? (
+            <StatusDot tone={ai.tone} pulse={ai.pulse}>
+              {ai.label}
+            </StatusDot>
           ) : null}
-          {aiBadge(t)}
-          {t.assigneeName ? (
-            <span className="ml-auto font-mono text-[11px] text-dim">{t.assigneeName.split(" ")[0]}</span>
-          ) : null}
-          {t.status !== "open" && view !== "resolved" ? (
-            <span className="font-mono text-[11px] text-dim">{t.status}</span>
-          ) : null}
+          <span className="ml-auto flex shrink-0 items-center gap-2">
+            {high ? (
+              <span
+                className={cn(
+                  "text-[11px] font-semibold tracking-wide uppercase",
+                  t.priority === "urgent" ? "text-danger" : "text-warn",
+                )}
+              >
+                {t.priority}
+              </span>
+            ) : null}
+            {t.assigneeName ? (
+              <Tip label={`Assigned to ${t.assigneeName}`}>
+                <span>
+                  <Avatar name={t.assigneeName} size={18} />
+                </span>
+              </Tip>
+            ) : null}
+          </span>
         </div>
       </div>
     </Link>

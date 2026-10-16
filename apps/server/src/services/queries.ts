@@ -1,6 +1,7 @@
 import { and, arrayOverlaps, count, desc, eq, ilike, inArray, isNull, lt, or, sql, type SQL } from "drizzle-orm";
 import { db } from "../db/index.ts";
 import { customers, drafts, messages, tickets, user, views } from "../db/schema.ts";
+import { markdownToPlain } from "../lib/text.ts";
 import type { ViewFilters } from "../lib/types.ts";
 
 export type SystemView = "inbox" | "unassigned" | "ai" | "mine" | "resolved" | "all";
@@ -58,12 +59,13 @@ export async function listTickets(
     filtersToWhere(orgId, filters, userId),
     opts.before ? lt(tickets.lastMessageAt, opts.before) : undefined,
   );
-  const lastMessage = db
-    .select({ body: messages.body })
-    .from(messages)
-    .where(and(eq(messages.ticketId, tickets.id), eq(messages.kind, "message")))
-    .orderBy(desc(messages.createdAt))
-    .limit(1);
+  const lastMessage = (col: typeof messages.body | typeof messages.authorType) =>
+    db
+      .select({ v: col })
+      .from(messages)
+      .where(and(eq(messages.ticketId, tickets.id), eq(messages.kind, "message")))
+      .orderBy(desc(messages.createdAt))
+      .limit(1);
   const rows = await db
     .select({
       id: tickets.id,
@@ -89,7 +91,9 @@ export async function listTickets(
         email: customers.email,
         avatarUrl: customers.avatarUrl,
       },
-      preview: sql<string | null>`(${lastMessage})`,
+      preview: sql<string | null>`(${lastMessage(messages.body)})`,
+      /** Who wrote the latest public message: whose turn it is at a glance. */
+      lastAuthorType: sql<"customer" | "agent" | "ai" | "system" | null>`(${lastMessage(messages.authorType)})`,
     })
     .from(tickets)
     .leftJoin(customers, eq(customers.id, tickets.customerId))
@@ -97,7 +101,7 @@ export async function listTickets(
     .where(where)
     .orderBy(desc(tickets.lastMessageAt))
     .limit(opts.limit ?? 50);
-  return rows.map((r) => ({ ...r, preview: r.preview ? r.preview.slice(0, 160) : null }));
+  return rows.map((r) => ({ ...r, preview: r.preview ? markdownToPlain(r.preview).slice(0, 160) : null }));
 }
 
 export async function countTickets(orgId: string, filters: ViewFilters, userId: string) {

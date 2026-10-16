@@ -16,7 +16,7 @@ import type { AppEnv } from "./middleware.ts";
  */
 export const testingRoutes = new Hono<AppEnv>();
 
-const CHANNEL = z.enum(["email", "widget", "api", "slack", "discord", "web"]);
+const CHANNEL = z.enum(["email", "widget", "portal", "api", "slack", "discord", "web"]);
 const OUTCOME = z.enum(["reply", "escalate", "any"]);
 
 testingRoutes.post("/simulate", async (c) => {

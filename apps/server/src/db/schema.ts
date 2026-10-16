@@ -26,6 +26,7 @@ import type {
   IntegrationConfig,
   RoutingConditions,
   RoutingSettings,
+  PortalSettings,
   SlaSettings,
   TicketFieldValue,
   TicketRouting,
@@ -66,6 +67,8 @@ export const workspaceSettings = pgTable("workspace_settings", {
   sso: jsonb("sso").$type<{ defaultRole: "member" | "admin"; enforcedDomains: string[] }>(),
   /** Auto-assignment settings; null until configured (defaults apply). */
   routing: jsonb("routing").$type<RoutingSettings>(),
+  /** Customer portal; null until configured (defaults apply). */
+  portal: jsonb("portal").$type<PortalSettings>(),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
@@ -111,7 +114,7 @@ export const channels = pgTable(
 
 export type TicketStatus = "open" | "pending" | "resolved" | "closed";
 export type TicketPriority = "low" | "normal" | "high" | "urgent";
-export type TicketChannel = "email" | "widget" | "api" | "slack" | "discord" | "web";
+export type TicketChannel = "email" | "widget" | "api" | "slack" | "discord" | "web" | "portal";
 export type AiState =
   | "none"
   | "processing"
@@ -186,7 +189,7 @@ export interface MessageMeta {
   slack?: { channel: string; ts: string; user?: string };
   delivery?: { status: "sent" | "failed"; error?: string };
   draftId?: string;
-  via?: "slack" | "discord" | "email" | "widget" | "api" | "web" | "ai";
+  via?: "slack" | "discord" | "email" | "widget" | "api" | "web" | "ai" | "portal";
   /** Set on messages that came from (or were mirrored to) Discord — used to avoid echo loops. */
   discord?: { channelId: string; messageId: string; user?: string };
 }
@@ -732,4 +735,18 @@ export const ticketLinks = pgTable(
     index("ticket_links_org_key_idx").on(t.orgId, t.provider, t.key),
     uniqueIndex("ticket_links_ticket_key_idx").on(t.ticketId, t.provider, t.key),
   ],
+);
+
+/** One-time sign-in links for the customer portal (only a hash of the code is stored). */
+export const portalSignIns = pgTable(
+  "portal_sign_ins",
+  {
+    codeHash: text("code_hash").primaryKey(),
+    orgId: orgId(),
+    email: text("email").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("portal_sign_ins_org_email_idx").on(t.orgId, t.email, t.createdAt)],
 );

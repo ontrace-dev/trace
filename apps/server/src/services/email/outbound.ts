@@ -6,8 +6,9 @@ import { channels, messages, tickets } from "../../db/schema.ts";
 import { env } from "../../env.ts";
 import { id } from "../../lib/ids.ts";
 import { getTransport } from "../../lib/mailer.ts";
-import { markdownToEmailHtml } from "../../lib/text.ts";
+import { escapeHtml, markdownToEmailHtml } from "../../lib/text.ts";
 import { getCustomer, registerDeliverer } from "../tickets.ts";
+import { portalFooterLink } from "../portal.ts";
 import { getOrg, getSettings } from "../workspace.ts";
 
 /** Sends public replies on email tickets, threaded with In-Reply-To/References. */
@@ -27,6 +28,7 @@ export function registerEmailDelivery() {
 
     const signature = channel?.config.signature ? `\n\n${channel.config.signature}` : "";
     const text = `${message.body}${signature}`;
+    const portalLink = await portalFooterLink(ticket);
     const attachments = await Promise.all(
       message.attachments.map(async (a) => ({
         filename: a.name,
@@ -41,8 +43,10 @@ export function registerEmailDelivery() {
       cc: ticket.email?.cc?.filter((c) => c.toLowerCase() !== fromAddress.toLowerCase()),
       replyTo: fromAddress,
       subject: `Re: ${ticket.subject} [${ref}]`,
-      text,
-      html: `<div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;font-size:14px;line-height:1.55;color:#111">${markdownToEmailHtml(text)}<p style="color:#888;font-size:12px;margin-top:24px">${ref} · reply to this email to continue the conversation</p></div>`,
+      text: portalLink ? `${text}\n\n—\n${ref} · view it online: ${portalLink}` : text,
+      html: `<div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;font-size:14px;line-height:1.55;color:#111">${markdownToEmailHtml(text)}<p style="color:#888;font-size:12px;margin-top:24px">${ref} · reply to this email to continue the conversation${
+        portalLink ? ` · <a href="${escapeHtml(portalLink)}" style="color:#555">view it online</a>` : ""
+      }</p></div>`,
       messageId: `<${messageId}>`,
       inReplyTo: ticket.email?.lastMessageId ? `<${ticket.email.lastMessageId}>` : undefined,
       references: refs.length ? refs.map((r) => `<${r}>`).join(" ") : undefined,

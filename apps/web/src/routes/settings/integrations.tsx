@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, Bug, Code2, Mail, MessageCircle, Plus, Webhook } from "lucide-react";
+import { ArrowRight, Bug, Code2, LifeBuoy, Mail, MessageCircle, Plus, Webhook } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
 import { CopyField, SettingsHeader, SettingsSection } from "../settings";
@@ -72,6 +72,13 @@ export function IntegrationsSettings() {
       status: null,
     },
     {
+      name: "Customer portal",
+      icon: <LifeBuoy className="size-4" />,
+      desc: "Where customers see all their requests and reply. Hosted, or embedded in your own platform.",
+      to: "portal",
+      status: null,
+    },
+    {
       name: "REST API",
       icon: <Code2 className="size-4" />,
       desc: "Open and update tickets from any system.",
@@ -110,6 +117,7 @@ export function IntegrationsSettings() {
             <p className="text-[12px] leading-relaxed text-muted">{t.desc}</p>
           </Link>
         ))}
+        {tiles.length % 2 ? <div className="hidden bg-bg sm:block" /> : null}
       </div>
 
       <ChannelNotifications items={channelHooks} />

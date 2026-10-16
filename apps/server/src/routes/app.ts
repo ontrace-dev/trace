@@ -29,6 +29,7 @@ import { id, secretToken } from "../lib/ids.ts";
 import type {
   AiSettings,
   ChatWebhookConfig,
+  PortalSettings,
   SlaSettings,
   ViewFilters,
   WebhookConfig,
@@ -55,6 +56,7 @@ import {
   sendDraft,
   updateTicket,
 } from "../services/tickets.ts";
+import { portalSettings } from "../services/portal.ts";
 import { getOrg, getSettings, updateSettings } from "../services/workspace.ts";
 import { WEBHOOK_EVENTS } from "../services/webhooks.ts";
 import { postToHook } from "../services/notifications/chat-webhooks.ts";
@@ -701,9 +703,15 @@ w.delete("/views/:id", async (c) => {
 
 // ---------------------------------------------------------------- settings (admin)
 
+/** Settings for the admin UI: the widget with its identity secret, the portal with its defaults filled in. */
+async function adminSettings(s: Awaited<ReturnType<typeof getSettings>>) {
+  const org = await getOrg(s.orgId);
+  return { ...publicSettings(s), widget: s.widget, portal: portalSettings(s, org?.name) };
+}
+
 w.get("/settings", async (c) => {
   const s = await getSettings(c.get("orgId"));
-  return c.json({ settings: { ...publicSettings(s), widget: s.widget }, aiApiKeyMasked: mask(s.ai.apiKey) });
+  return c.json({ settings: await adminSettings(s), aiApiKeyMasked: mask(s.ai.apiKey) });
 });
 
 w.patch("/settings", requireAdmin, async (c) => {
@@ -719,6 +727,7 @@ w.patch("/settings", requireAdmin, async (c) => {
       timezone: z.string().optional(),
       ai: z.record(z.string(), z.unknown()).optional(),
       widget: z.record(z.string(), z.unknown()).optional(),
+      portal: z.record(z.string(), z.unknown()).optional(),
       sla: z.object({ firstResponse: z.record(z.string(), z.number()) }).optional(),
     })
     .parse(await c.req.json());
@@ -731,11 +740,14 @@ w.patch("/settings", requireAdmin, async (c) => {
     timezone: b.timezone,
     ai,
     widget: b.widget ? ({ ...current.widget, ...b.widget } as WidgetSettings) : undefined,
+    portal: b.portal
+      ? ({ ...portalSettings(current, (await getOrg(orgId))?.name), ...b.portal } as PortalSettings)
+      : undefined,
     sla: b.sla
       ? ({ firstResponse: { ...current.sla.firstResponse, ...b.sla.firstResponse } } as SlaSettings)
       : undefined,
   });
-  return c.json({ settings: { ...publicSettings(row), widget: row.widget } });
+  return c.json({ settings: await adminSettings(row) });
 });
 
 // ---------------------------------------------------------------- channels (admin)

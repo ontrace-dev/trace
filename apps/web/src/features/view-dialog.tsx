@@ -12,7 +12,7 @@ import { homeKeys } from "@/features/home/types";
 
 const STATUSES = ["open", "pending", "resolved", "closed"] as const;
 const PRIORITIES = ["low", "normal", "high", "urgent"] as const;
-const CHANNELS = ["email", "widget", "slack", "discord", "api", "web"] as const;
+const CHANNELS = ["email", "widget", "portal", "slack", "discord", "api", "web"] as const;
 const AI_STATES = ["draft_ready", "escalated", "awaiting_approval", "auto_replied", "processing"] as const;
 
 function Chips<T extends string>({

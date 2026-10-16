@@ -16,6 +16,8 @@ import { publicApi } from "./routes/public-api.ts";
 import { slackAppRoutes, slackPublicRoutes } from "./routes/slack.ts";
 import { discordAppRoutes } from "./routes/discord.ts";
 import { widgetRoutes } from "./routes/widget.ts";
+import { portalPageRoutes, portalRoutes } from "./routes/portal.ts";
+import { registerPortalDelivery } from "./services/portal.ts";
 import { knowledgeRoutes } from "./routes/knowledge.ts";
 import { mcpPublicRoutes, mcpRoutes } from "./routes/mcp.ts";
 import { routingRoutes } from "./routes/routing.ts";
@@ -43,6 +45,7 @@ import { ssoLookup } from "./services/sso.ts";
 const root = new URL("../../..", import.meta.url).pathname;
 const webDist = join(root, "apps/web/dist");
 const widgetDist = join(root, "packages/widget/dist");
+const portalDist = join(root, "packages/portal/dist");
 
 const app = new Hono();
 if (!isProd) app.use("/api/*", logger());
@@ -71,13 +74,13 @@ app.get("/api/sso/lookup", async (c) => c.json({ sso: await ssoLookup(c.req.quer
 // Auth (better-auth handles sign-in/up, sessions, organizations = workspaces, invitations).
 app.on(["GET", "POST"], "/api/auth/*", async (c) => (await demoAuthGuard(c.req.raw)) ?? auth.handler(c.req.raw));
 
-// Public, cross-origin endpoints: the embeddable widget, the REST API and inbound webhooks.
-app.use(
-  "/api/widget/*",
-  cors({ origin: (o) => o ?? "*", credentials: false, allowHeaders: ["content-type", "authorization"] }),
-);
+// Public, cross-origin endpoints: the embeddable widget and portal, the REST API and inbound webhooks.
+for (const path of ["/api/widget/*", "/api/portal/*"]) {
+  app.use(path, cors({ origin: (o) => o ?? "*", credentials: false, allowHeaders: ["content-type", "authorization"] }));
+}
 app.use("/api/v1/*", cors({ origin: "*", allowHeaders: ["content-type", "authorization"] }));
 app.route("/api/widget", widgetRoutes);
+app.route("/api/portal", portalRoutes);
 app.route("/api/v1", publicApi);
 app.route("/api/inbound", inboundRoutes);
 app.route("/api/integrations/slack", slackPublicRoutes);
@@ -103,16 +106,26 @@ app.route("/api/w/:wid/fields", scoped(fieldsRoutes as never));
 app.route("/api/w/:wid/issues", scoped(issuesRoutes as never));
 app.route("/api", appRoutes);
 
-// The widget bundle: <script src="https://trace.example.com/widget.js" data-key="wk_…" async></script>
-app.get("/widget.js", async (c) => {
-  const file = join(widgetDist, "widget.js");
-  if (!existsSync(file)) return c.text("// widget not built — run `vp run widget#build`", 404);
-  return c.body(await readFile(file), 200, {
-    "content-type": "application/javascript; charset=utf-8",
-    "cache-control": isProd ? "public, max-age=300" : "no-cache",
-    "access-control-allow-origin": "*",
+// The embeddable bundles:
+//   <script src="https://trace.example.com/widget.js" data-key="wk_…" async></script>
+//   <trace-portal workspace="acme"></trace-portal><script src="https://trace.example.com/portal.js" async></script>
+for (const [file, dist, pkg] of [
+  ["widget.js", widgetDist, "widget"],
+  ["portal.js", portalDist, "portal"],
+] as const) {
+  app.get(`/${file}`, async (c) => {
+    const path = join(dist, file);
+    if (!existsSync(path)) return c.text(`// ${pkg} not built — run \`vp run ${pkg}#build\``, 404);
+    return c.body(await readFile(path), 200, {
+      "content-type": "application/javascript; charset=utf-8",
+      "cache-control": isProd ? "public, max-age=300" : "no-cache",
+      "access-control-allow-origin": "*",
+    });
   });
-});
+}
+
+// The hosted customer portal (before the SPA fallback, which would otherwise catch it).
+app.route("/portal", portalPageRoutes);
 
 // Production: serve the built SPA.
 if (existsSync(webDist)) {
@@ -122,6 +135,7 @@ if (existsSync(webDist)) {
 }
 
 registerEmailDelivery();
+registerPortalDelivery();
 await runMigrations();
 
 // overrideGlobalObjects: false — Hono's faster global Response breaks libraries that fetch files themselves

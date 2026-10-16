@@ -12,6 +12,7 @@ import { MembersSettings } from "./settings/members";
 import { RoutingSettingsPage } from "./settings/routing";
 import { SlackSettings } from "./settings/slack";
 import { SsoSettingsPage } from "./settings/sso";
+import { PortalSettingsPage } from "./settings/portal";
 import { WidgetSettingsPage } from "./settings/widget";
 import { Select } from "@/components/ui";
 import { cn } from "@/lib/utils";
@@ -53,6 +54,7 @@ const areas: { label: string; icon: LucideIcon; pages: Page[]; hub?: boolean }[]
       { id: "integrations", label: "Overview", el: IntegrationsSettings },
       { id: "channels", label: "Email", el: ChannelsSettings },
       { id: "widget", label: "Chat widget", el: WidgetSettingsPage },
+      { id: "portal", label: "Customer portal", el: PortalSettingsPage },
       { id: "slack", label: "Slack", el: SlackSettings },
       { id: "discord", label: "Discord", el: DiscordSettings },
       { id: "api", label: "API & keys", el: ApiSettings },

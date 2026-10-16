@@ -57,6 +57,17 @@ function inline(s: string) {
     .replace(/\[(.+?)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2">$1</a>');
 }
 
+/** One line of plain text from markdown, for previews (no **, `, # or link syntax). */
+export function markdownToPlain(md: string): string {
+  return md
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, "$1")
+    .replace(/^\s{0,3}(#{1,6}|>|[-*•]|\d+[.)])\s+/gm, "")
+    .replace(/(\*\*|__|`)(.+?)\1/g, "$2")
+    .replace(/(^|\s)[*_]([^*_\s][^*_]*)[*_](?=\s|[.,!?]|$)/g, "$1$2")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export function truncate(s: string, n: number) {
   return s.length > n ? `${s.slice(0, n - 1)}…` : s;
 }

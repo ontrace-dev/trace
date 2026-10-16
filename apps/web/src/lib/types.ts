@@ -1,6 +1,6 @@
 export type TicketStatus = "open" | "pending" | "resolved" | "closed";
 export type TicketPriority = "low" | "normal" | "high" | "urgent";
-export type TicketChannel = "email" | "widget" | "api" | "slack" | "discord" | "web";
+export type TicketChannel = "email" | "widget" | "api" | "slack" | "discord" | "web" | "portal";
 export type AiState =
   | "none"
   | "processing"
@@ -47,6 +47,7 @@ export interface TicketListItem {
   createdAt: string;
   customer: { id: string; name: string | null; email: string | null; avatarUrl: string | null } | null;
   preview: string | null;
+  lastAuthorType: "customer" | "agent" | "ai" | "system" | null;
 }
 
 export interface Ticket {
@@ -239,6 +240,25 @@ export interface WidgetSettings {
   customCss: string;
 }
 
+export interface PortalSettings {
+  enabled: boolean;
+  title: string;
+  intro: string;
+  logoUrl: string;
+  homeUrl: string;
+  accentColor: string;
+  accentForeground: string;
+  theme: "light" | "dark" | "auto";
+  radius: number;
+  fontFamily: string;
+  emailSignIn: boolean;
+  allowNewRequests: boolean;
+  showKnowledge: boolean;
+  showPoweredBy: boolean;
+  allowedOrigins: string[];
+  customCss: string;
+}
+
 export interface WorkspaceSettings {
   orgId: string;
   ticketPrefix: string;
@@ -247,6 +267,8 @@ export interface WorkspaceSettings {
   widgetKey: string;
   ai: AiSettings;
   widget: WidgetSettings;
+  /** Only on GET /settings (with defaults filled in). */
+  portal?: PortalSettings;
   sla: { firstResponse: Record<TicketPriority, number> };
 }
 

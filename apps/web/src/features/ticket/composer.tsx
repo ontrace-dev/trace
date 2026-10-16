@@ -130,7 +130,9 @@ export const Composer = React.forwardRef<
             ? "via Discord"
             : ticket.channel === "api"
               ? "via API"
-              : "";
+              : ticket.channel === "portal"
+                ? "via customer portal"
+                : "";
 
   return (
     <div

@@ -46,7 +46,7 @@ import { FactChips } from "@/features/issues/ticket-fields";
 import { TraceAnalysis, TraceWaterfall } from "@/features/ticket/trace-view";
 import { useTicket, useTicketActions } from "@/features/ticket/use-ticket";
 import type { Draft, Message, TicketDetail } from "@/lib/types";
-import { bytes, clock, cn, md, shortDate } from "@/lib/utils";
+import { bytes, clock, cn, md } from "@/lib/utils";
 import { useWorkspace } from "@/lib/workspace";
 
 export function TicketPane() {
@@ -248,18 +248,28 @@ function TicketView({ data }: { data: TicketDetail }) {
         </header>
 
         <div ref={scroller} className="flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto p-4 md:p-5">
-          {messages.map((m) => (
+          {messages.map((m, i) => (
             <React.Fragment key={m.id}>
+              {i === 0 || dayKey(messages[i - 1]!.createdAt) !== dayKey(m.createdAt) ? (
+                <DayDivider date={m.createdAt} />
+              ) : null}
               <MessageItem m={m} />
               {m.id === analysisAfter && latestTrace ? (
-                <TraceAnalysis spans={latestTrace.spans} agentName={boot.settings.ai.agentName} />
+                <div className={OURS}>
+                  <TraceAnalysis spans={latestTrace.spans} agentName={boot.settings.ai.agentName} />
+                </div>
               ) : null}
             </React.Fragment>
           ))}
           <TicketActionRuns runs={data.runs} />
-          {ticket.aiState === "processing" ? <Thinking name={boot.settings.ai.agentName} /> : null}
+          {ticket.aiState === "processing" ? (
+            <div className={OURS}>
+              <Thinking name={boot.settings.ai.agentName} />
+            </div>
+          ) : null}
           {draft && ticket.aiState !== "processing" ? (
             <DraftCard
+              className={OURS}
               draft={draft}
               ticketId={ticket.id}
               escalated={ticket.aiState === "escalated"}
@@ -296,76 +306,136 @@ function Thinking({ name }: { name: string }) {
   );
 }
 
+const dayKey = (iso: string) => new Date(iso).toDateString();
+
+function DayDivider({ date }: { date: string }) {
+  const d = new Date(date);
+  const today = new Date();
+  const yesterday = new Date(Date.now() - 86_400_000);
+  const label =
+    d.toDateString() === today.toDateString()
+      ? "Today"
+      : d.toDateString() === yesterday.toDateString()
+        ? "Yesterday"
+        : d.toLocaleDateString([], {
+            weekday: "short",
+            month: "short",
+            day: "numeric",
+            year: d.getFullYear() === today.getFullYear() ? undefined : "numeric",
+          });
+  return (
+    <div className="flex items-center gap-3 pt-1 text-[11.5px] text-dim">
+      <span className="h-px flex-1 bg-line-2" />
+      {label}
+      <span className="h-px flex-1 bg-line-2" />
+    </div>
+  );
+}
+
+/**
+ * Customer messages sit on the left, everything from your side (team replies, AI replies, notes, drafts) on
+ * the right, each with its own color: neutral for the customer, blue for teammates, purple for the AI,
+ * amber for internal notes. You can tell who said what without reading the names.
+ */
+const OURS = "@2xl:ml-16";
+const THEIRS = "@2xl:mr-16";
+
+const ROLE = {
+  customer: { card: "border-line bg-white/[0.025]", rail: "", tag: "Customer", tagTone: "text-muted" },
+  agent: {
+    card: "border-line-strong bg-raised",
+    rail: "border-l-2 border-l-info/70",
+    tag: "Team reply",
+    tagTone: "text-info",
+  },
+  ai: {
+    card: "border-accent/25 bg-accent/[0.05]",
+    rail: "border-l-2 border-l-accent",
+    tag: "AI reply",
+    tagTone: "text-accent-text",
+  },
+  note: {
+    card: "border-warn/25 bg-warn/[0.05]",
+    rail: "border-l-2 border-l-warn/80",
+    tag: "Internal note",
+    tagTone: "text-warn",
+  },
+} as const;
+
 function MessageItem({ m }: { m: Message }) {
   const { boot, wid } = useWorkspace();
   if (m.kind === "event") {
     return (
-      <div className="flex items-center gap-2 pl-9 font-mono text-[11.5px] text-dim">
-        <span className="h-px w-3 bg-line-strong" />
+      <div className={cn("flex items-center justify-center gap-2 py-0.5 text-[11.5px] text-dim", OURS)}>
+        <span className="h-px w-4 bg-line-strong" />
         {m.body}
         <span className="text-faint">· {clock(m.createdAt)}</span>
+        <span className="h-px w-4 bg-line-strong" />
       </div>
     );
   }
-  if (m.meta.action) return <ActionNote m={m} />;
+  if (m.meta.action)
+    return (
+      <div className={OURS}>
+        <ActionNote m={m} />
+      </div>
+    );
   const isNote = m.kind === "note";
   const isAi = m.authorType === "ai";
   const isCustomer = m.authorType === "customer";
+  const role = isNote ? ROLE.note : isAi ? ROLE.ai : isCustomer ? ROLE.customer : ROLE.agent;
   const name = m.authorName ?? (isAi ? boot.settings.ai.agentName : isCustomer ? "Customer" : "Agent");
   return (
-    <div className={cn("flex gap-2.5", isNote && "border border-warn/20 bg-warn/[0.04] p-3")}>
-      {isAi ? (
-        <span className="flex h-[26px] w-[26px] shrink-0 items-center justify-center bg-accent/15 text-accent-text">
-          <Sparkles className="size-[13px]" />
-        </span>
-      ) : (
-        <Avatar name={name} size={26} tone={isCustomer ? "neutral" : "accent"} />
-      )}
-      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-        <div className="flex items-center gap-2">
-          <span className="text-[12px] font-semibold text-fg-2">{name}</span>
-          {isAi ? <Badge tone="solid-accent">AI</Badge> : null}
-          {isNote ? (
-            <span className="flex items-center gap-1 font-mono text-[11px] text-warn">
-              <Lock className="size-2.5" /> internal note
-            </span>
-          ) : null}
-          {m.meta.via && m.meta.via !== "web" && m.meta.via !== "ai" ? (
-            <span className="font-mono text-[11px] text-dim">via {m.meta.via}</span>
-          ) : null}
-          <span className="font-mono text-[11px] text-dim">
-            {shortDate(m.createdAt)} {clock(m.createdAt)}
+    <article className={cn("flex flex-col gap-2 border p-3.5", role.card, role.rail, isCustomer ? THEIRS : OURS)}>
+      <header className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+        {isAi ? (
+          <span className="flex size-6 shrink-0 items-center justify-center bg-accent/15 text-accent-text">
+            <Sparkles className="size-3" />
           </span>
-          {m.meta.delivery?.status === "failed" ? (
-            <Tip label={m.meta.delivery.error ?? "Delivery failed"}>
-              <span className="flex items-center gap-1 font-mono text-[11px] text-danger">
-                <AlertTriangle className="size-3" /> not delivered
-              </span>
-            </Tip>
-          ) : null}
-        </div>
-        <div
-          className={cn("prose-trace text-[13px] leading-[1.6]", isCustomer ? "text-body" : "text-fg-3")}
-          dangerouslySetInnerHTML={{ __html: md(m.body) }}
-        />
-        {m.attachments.length ? (
-          <div className="flex flex-wrap gap-1.5 pt-1">
-            {m.attachments.map((a) => (
-              <a
-                key={a.id}
-                href={`/api/w/${wid}/attachments/${a.id}`}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-1.5 border border-line-strong px-2 py-1 font-mono text-[11.5px] text-muted hover:text-fg"
-              >
-                <Paperclip className="size-3" /> {a.name} <span className="text-dim">{bytes(a.size)}</span>
-              </a>
-            ))}
-          </div>
+        ) : (
+          <Avatar name={name} size={24} tone={isCustomer ? "neutral" : "accent"} />
+        )}
+        <span className="text-[13px] font-semibold text-fg">{name}</span>
+        <span className={cn("flex items-center gap-1 text-[11.5px]", role.tagTone)}>
+          {isNote ? <Lock className="size-2.5" /> : null}
+          {role.tag}
+          {isNote ? <span className="text-dim">· only your team sees this</span> : null}
+        </span>
+        {m.meta.via && m.meta.via !== "web" && m.meta.via !== "ai" ? (
+          <span className="text-[11.5px] text-dim">via {m.meta.via}</span>
         ) : null}
-        {m.meta.sources?.length ? <Sources sources={m.meta.sources} /> : null}
-      </div>
-    </div>
+        {m.meta.delivery?.status === "failed" ? (
+          <Tip label={m.meta.delivery.error ?? "Delivery failed"}>
+            <span className="flex items-center gap-1 text-[11.5px] text-danger">
+              <AlertTriangle className="size-3" /> not delivered
+            </span>
+          </Tip>
+        ) : null}
+        <Tip label={new Date(m.createdAt).toLocaleString()}>
+          <span className="ml-auto text-[11.5px] text-dim tabular-nums">{clock(m.createdAt)}</span>
+        </Tip>
+      </header>
+      <div
+        className={cn("prose-trace text-[13.5px] leading-[1.6]", isCustomer ? "text-fg-2" : "text-fg-3")}
+        dangerouslySetInnerHTML={{ __html: md(m.body) }}
+      />
+      {m.attachments.length ? (
+        <div className="flex flex-wrap gap-1.5">
+          {m.attachments.map((a) => (
+            <a
+              key={a.id}
+              href={`/api/w/${wid}/attachments/${a.id}`}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1.5 border border-line-strong px-2 py-1 text-[11.5px] text-muted hover:text-fg"
+            >
+              <Paperclip className="size-3" /> {a.name} <span className="text-dim">{bytes(a.size)}</span>
+            </a>
+          ))}
+        </div>
+      ) : null}
+      {m.meta.sources?.length ? <Sources sources={m.meta.sources} /> : null}
+    </article>
   );
 }
 
@@ -378,17 +448,19 @@ function DraftCard({
   ticketId,
   escalated,
   onEdit,
+  className,
 }: {
   draft: Draft;
   ticketId: string;
   escalated: boolean;
   onEdit: () => void;
+  className?: string;
 }) {
   const { sendDraft, discardDraft, runAi } = useTicketActions(ticketId);
   const pct = Math.round(draft.confidence * 100);
   const color = pct >= 80 ? "bg-accent" : pct >= 50 ? "bg-warn" : "bg-danger/70";
   return (
-    <div className="flex flex-col gap-3 border border-line-strong bg-raised p-3.5">
+    <div className={cn("flex flex-col gap-3 border border-dashed border-accent/40 bg-accent/[0.03] p-3.5", className)}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-[7px]">
           <PenLine className="size-[13px] text-accent-text" />

@@ -1,6 +1,7 @@
 import { and, desc, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { db } from "../db/index.ts";
 import { actionRuns, customers, drafts, messages, spans, tickets, user, views } from "../db/schema.ts";
+import { markdownToPlain } from "../lib/text.ts";
 import type { ViewFilters } from "../lib/types.ts";
 import { filtersToWhere, type SystemView, systemViewFilters } from "./queries.ts";
 
@@ -147,6 +148,9 @@ export interface NeedItem {
   assigneeName: string | null;
   customerName: string | null;
   customerEmail: string | null;
+  customerCompany: string | null;
+  /** The customer's latest message, as plain text. */
+  preview: string | null;
   firstResponseDueAt: string | null;
   waitingSince: string;
   kinds: NeedKind[];
@@ -181,6 +185,10 @@ async function needsYou(orgId: string, userId: string) {
         assigneeName: user.name,
         customerName: customers.name,
         customerEmail: customers.email,
+        customerCompany: customers.company,
+        preview: sql<
+          string | null
+        >`(select ${messages.body} from ${messages} where ${messages.ticketId} = ${tickets.id} and ${messages.kind} = 'message' and ${messages.authorType} = 'customer' order by ${messages.createdAt} desc limit 1)`,
         firstResponseDueAt: tickets.firstResponseDueAt,
         firstRespondedAt: tickets.firstRespondedAt,
         lastCustomerMessageAt: tickets.lastCustomerMessageAt,
@@ -249,6 +257,8 @@ async function needsYou(orgId: string, userId: string) {
       assigneeName: t.assigneeName,
       customerName: t.customerName,
       customerEmail: t.customerEmail,
+      customerCompany: t.customerCompany,
+      preview: t.preview ? markdownToPlain(t.preview).slice(0, 220) : null,
       firstResponseDueAt: t.firstResponseDueAt?.toISOString() ?? null,
       waitingSince: waitingSince.toISOString(),
       kinds,

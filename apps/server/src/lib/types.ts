@@ -50,6 +50,37 @@ export interface WidgetSettings {
   customCss: string;
 }
 
+/**
+ * The customer portal: where customers sign in and see all their requests. The same settings drive the
+ * hosted page (/portal/<workspace>) and the embeddable <trace-portal> element.
+ */
+export interface PortalSettings {
+  enabled: boolean;
+  title: string;
+  intro: string;
+  /** Logo shown in the portal header; falls back to the workspace logo. */
+  logoUrl: string;
+  /** "Back to website" link in the hosted portal header. */
+  homeUrl: string;
+  accentColor: string;
+  accentForeground: string;
+  theme: "light" | "dark" | "auto";
+  radius: number;
+  fontFamily: string;
+  /** Customers can sign in with a one-time link sent to their email. Off = only your platform signs them in. */
+  emailSignIn: boolean;
+  allowNewRequests: boolean;
+  /** Search box over knowledge marked public. */
+  showKnowledge: boolean;
+  showPoweredBy: boolean;
+  /**
+   * Sites that may embed the portal, and the only places sign-in links may return to besides the hosted page.
+   * Same syntax as the widget's allowed origins; empty = hosted page only for sign-in links, any site may call the API.
+   */
+  allowedOrigins: string[];
+  customCss: string;
+}
+
 export interface SlaSettings {
   /** First-response target in minutes, per priority. */
   firstResponse: Record<"low" | "normal" | "high" | "urgent", number>;

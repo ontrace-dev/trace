@@ -1,29 +1,22 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { TrendingUp } from "lucide-react";
+import { ArrowRight, CircleCheck, Sparkles, TrendingUp } from "lucide-react";
 import * as React from "react";
-import { Spinner } from "@/components/ui";
-import { ago, cn, since } from "@/lib/utils";
+import { Avatar, Spinner, StatusDot } from "@/components/ui";
+import { type Tone, toneDot } from "@/lib/ticket-state";
+import { ago, cn } from "@/lib/utils";
 import { useWorkspace } from "@/lib/workspace";
 import { type HomeData, homeKeys, type HotTopic, type NeedItem, type NeedKind } from "./types";
 
 /*
- * Home — designed in pen.dev ("trace — Home (app)"). One dominant region, the triage waterfall: every ticket
- * that needs a human, drawn as a span over the last 24h (grey: customer waiting, orange from the moment the
- * first-reply target passed, purple square: when trace worked it). Color is semantic only — orange is time/SLA,
- * purple is the AI.
+ * Home answers one question: what should I do next? The headline says how much needs a person; below it the
+ * work is grouped by what you'd do (decide, answer, take over, send), most urgent first. Every ticket appears
+ * once, under its most important reason, with enough context (customer, what they asked, how long they've
+ * waited, what the AI already did) to act without opening it first. Volume and trends live in Insights.
  */
 
-const TRACK = 280;
-const WINDOW_H = 24;
-const xFor = (iso: string | null | undefined) => {
-  if (!iso) return null;
-  const h = (Date.now() - new Date(iso).getTime()) / 3_600_000;
-  return Math.round(TRACK * (1 - Math.min(Math.max(h, 0), WINDOW_H) / WINDOW_H));
-};
-
 const humanize = (s: string) => s.replace(/_/g, " ");
-/** "just now" / "12m ago" */
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 export function HomePage() {
   const { api, wid } = useWorkspace();
@@ -40,20 +33,178 @@ export function HomePage() {
     );
   if (q.error || !q.data)
     return <div className="p-10 text-[13px] text-danger">Couldn't load home: {(q.error as Error)?.message}</div>;
-  const d = q.data;
-  return <HomeLayout data={d} />;
+  return <HomeLayout data={q.data} />;
 }
 
-function HomeLayout({ data: d }: { data: HomeData }) {
-  const [filter, setFilter] = React.useState<Filter>("all");
+/* ------------------------------------------------------------------ lanes */
+
+interface Lane {
+  id: string;
+  kinds: NeedKind[];
+  title: (agent: string) => string;
+  hint: (agent: string) => string;
+  tone: Tone;
+  action: (i: NeedItem) => string;
+}
+
+/** In order of urgency. A ticket lands in the first lane matching its most important reason. */
+const LANES: Lane[] = [
+  {
+    id: "decide",
+    kinds: ["approval"],
+    title: () => "Waiting for your decision",
+    hint: (a) => `${a} wants to take an action on these and needs a yes or no.`,
+    tone: "accent",
+    action: () => "Review",
+  },
+  {
+    id: "late",
+    kinds: ["sla_breached", "sla_soon"],
+    title: () => "Waiting for a first reply",
+    hint: () => "Nobody has answered these customers yet, and the first-reply target has passed or is close.",
+    tone: "warn",
+    action: (i) => (i.draft ? "Review draft" : "Reply"),
+  },
+  {
+    id: "handoff",
+    kinds: ["escalated", "ai_error"],
+    title: (a) => `Handed off by ${a}`,
+    hint: (a) => `${a} wasn't confident enough to answer these on its own, or ran into an error.`,
+    tone: "warn",
+    action: () => "Take over",
+  },
+  {
+    id: "mine",
+    kinds: ["mine_waiting"],
+    title: () => "Assigned to you",
+    hint: () => "Customers waiting on your reply.",
+    tone: "plain",
+    action: (i) => (i.draft ? "Review draft" : "Reply"),
+  },
+  {
+    id: "unowned",
+    kinds: ["urgent_unassigned"],
+    title: () => "High priority, nobody on it",
+    hint: () => "Pick one up or assign it to someone.",
+    tone: "plain",
+    action: () => "Pick up",
+  },
+  {
+    id: "drafts",
+    kinds: ["draft_ready"],
+    title: () => "Drafts ready to send",
+    hint: (a) => `${a} wrote a reply for each of these. Check it, edit if needed, and send.`,
+    tone: "accent",
+    action: () => "Review draft",
+  },
+];
+
+function laneOf(i: NeedItem) {
+  return LANES.find((l) => l.kinds.includes(i.kinds[0]!)) ?? LANES[LANES.length - 1]!;
+}
+
+function HomeLayout({ data }: { data: HomeData }) {
+  const lanes = React.useMemo(() => {
+    const by = new Map<string, NeedItem[]>();
+    for (const i of data.needs.items) {
+      const l = laneOf(i);
+      by.set(l.id, [...(by.get(l.id) ?? []), i]);
+    }
+    return LANES.map((l) => ({ lane: l, items: by.get(l.id) ?? [] })).filter((x) => x.items.length);
+  }, [data.needs.items]);
   return (
     <div className="h-full overflow-y-auto">
-      <div className="flex min-h-full min-w-0 flex-col">
-        <Brief data={d} onFilter={setFilter} />
-        <Surging topics={d.hot} />
-        <Triage data={d} filter={filter} onFilter={setFilter} />
+      <div className="mx-auto flex min-h-full max-w-[1320px] min-w-0 flex-col">
+        <Headline data={data} lanes={lanes} />
+        <Surging topics={data.hot} />
+        <div className="grid flex-1 xl:grid-cols-[minmax(0,1fr)_300px]">
+          <div className="flex min-w-0 flex-col xl:border-r xl:border-line">
+            {lanes.length ? (
+              lanes.map(({ lane, items }) => <LaneSection key={lane.id} lane={lane} items={items} />)
+            ) : (
+              <AllClear data={data} />
+            )}
+            {data.needs.total > data.needs.items.length ? (
+              <MoreInInbox n={data.needs.total - data.needs.items.length} />
+            ) : null}
+          </div>
+          <LastDay data={data} />
+        </div>
       </div>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ headline */
+
+function Headline({ data, lanes }: { data: HomeData; lanes: { lane: Lane; items: NeedItem[] }[] }) {
+  const { slug, boot } = useWorkspace();
+  const navigate = useNavigate();
+  const agent = boot.settings.ai.agentName;
+  const total = data.needs.total;
+  const top = data.needs.items[0];
+  const count = (id: string) => lanes.find((l) => l.lane.id === id)?.items.length ?? 0;
+
+  const start = React.useCallback(() => {
+    if (top)
+      navigate({ to: "/w/$slug/inbox/$view/$ticket", params: { slug, view: "inbox", ticket: String(top.number) } });
+  }, [navigate, slug, top]);
+  // ↵ anywhere on Home starts triage (unless you're typing or a dialog is open).
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Enter" || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+      const el = document.activeElement;
+      if (el && el !== document.body && !(el instanceof HTMLAnchorElement)) return;
+      if (document.querySelector("[role=dialog]")) return;
+      e.preventDefault();
+      start();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [start]);
+
+  // One sentence per lane that has something, most urgent first.
+  const parts = [
+    count("decide") && `${plural(count("decide"), "action")} waiting for your approval`,
+    count("late") && `${plural(count("late"), "customer")} still without a first reply`,
+    count("handoff") && `${count("handoff")} handed off by ${agent}`,
+    count("mine") && `${count("mine")} assigned to you`,
+    count("unowned") && `${count("unowned")} high priority with nobody on it`,
+    count("drafts") && `${plural(count("drafts"), "draft")} ready to send`,
+  ].filter(Boolean) as string[];
+
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+
+  return (
+    <section className="flex flex-col gap-5 border-b border-line px-4 pt-8 pb-7 md:flex-row md:items-end md:justify-between md:px-10 md:pt-10">
+      <div className="flex min-w-0 flex-col gap-2">
+        <span className="text-[12.5px] text-muted">
+          {greeting} · {new Date().toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" })}
+        </span>
+        <h1 className="text-[24px] leading-tight font-semibold tracking-[-0.4px] text-fg">
+          {total ? `${plural(total, "ticket")} ${total === 1 ? "needs" : "need"} a person` : "You're all caught up"}
+        </h1>
+        <p className="max-w-[720px] text-[13.5px] leading-relaxed text-body">
+          {parts.length
+            ? `${parts.slice(0, -1).join(", ")}${parts.length > 1 ? " and " : ""}${parts.at(-1)}.`
+            : `Nothing is waiting on your team. ${agent} keeps working new conversations as they come in.`}
+        </p>
+      </div>
+      {top ? (
+        <div className="flex shrink-0 flex-col items-start gap-1.5 md:items-end">
+          <button
+            onClick={start}
+            className="flex items-center gap-2.5 bg-fg px-3.5 py-2 text-[13px] font-medium text-[#080808] hover:bg-white"
+          >
+            Start with the most urgent <span className="font-mono text-[11px] text-[#55555f]">↵</span>
+          </button>
+          <span className="max-w-[300px] truncate text-[11.5px] text-dim">
+            #{top.number} · {top.subject}
+          </span>
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -75,325 +226,221 @@ function Surging({ topics }: { topics: HotTopic[] }) {
         {top.baseline < 1 ? "under 1" : Math.round(top.baseline)} a day
         {topics.length > 1 ? ` · ${topics.length - 1} more topic${topics.length > 2 ? "s" : ""} above usual` : ""}
       </span>
-      <span className="ml-auto shrink-0 font-mono text-[11px] text-dim">insights →</span>
+      <span className="ml-auto shrink-0 text-[11.5px] text-dim">Insights →</span>
     </Link>
   );
 }
 
-/* ------------------------------------------------------------------ brief */
+/* ------------------------------------------------------------------ a lane */
 
-function Brief({ data, onFilter }: { data: HomeData; onFilter: (f: Filter) => void }) {
-  const { slug, boot } = useWorkspace();
-  const navigate = useNavigate();
-  const { total, counts } = data.needs;
-  const figures: { value: number; label: string; filter: Filter; tone?: string }[] = [
-    { value: total, label: "need you", filter: "all" },
-    { value: counts.sla_breached, label: "past first reply", filter: "sla", tone: "text-warn" },
-    { value: counts.approval, label: "awaiting approval", filter: "approvals", tone: "text-accent-text" },
-    { value: counts.draft_ready, label: "drafts to review", filter: "drafts" },
-  ];
-  const top = data.needs.items[0];
-  const start = React.useCallback(() => {
-    if (top)
-      navigate({ to: "/w/$slug/inbox/$view/$ticket", params: { slug, view: "inbox", ticket: String(top.number) } });
-  }, [navigate, slug, top]);
-  // ↵ anywhere on Home starts triage (unless you're typing or a dialog is open).
-  React.useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Enter" || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
-      const el = document.activeElement;
-      if (el && el !== document.body && !(el instanceof HTMLAnchorElement)) return;
-      if (document.querySelector("[role=dialog]")) return;
-      e.preventDefault();
-      start();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [start]);
-  const now = new Date();
-  const dateline = [
-    now.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }).replace(",", ""),
-    now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    boot.org.slug,
-  ].join(" · ");
-  return (
-    <section className="flex flex-col gap-[22px] border-b border-line px-4 pt-8 pb-[34px] md:px-10 md:pt-10">
-      <span className="font-mono text-[11px] tracking-[0.1em] text-dim uppercase">{dateline}</span>
-      <div className="flex flex-wrap items-end justify-between gap-x-12 gap-y-6">
-        <h1 className="sr-only">Home</h1>
-        <div className="flex flex-wrap items-end gap-x-12 gap-y-5">
-          {figures.map((f) => (
-            <button
-              key={f.label}
-              onClick={() => {
-                onFilter(f.filter);
-                document.getElementById("needs-you")?.scrollIntoView({ behavior: "smooth", block: "start" });
-              }}
-              className="group flex flex-col items-start gap-2 text-left"
-            >
-              <span
-                className={cn(
-                  "text-[34px] leading-none font-medium tracking-[-1px] tabular-nums",
-                  f.value ? (f.tone ?? "text-fg") : "text-dim",
-                )}
-              >
-                {f.value}
-              </span>
-              <span className="font-mono text-[11px] text-dim group-hover:text-fg-2">{f.label}</span>
-            </button>
-          ))}
-        </div>
-        {top ? (
-          <div className="flex flex-col items-end gap-2">
-            <button
-              onClick={start}
-              className="flex items-center gap-2.5 bg-fg px-3 py-2 text-[12.5px] font-medium text-[#080808] hover:bg-white"
-            >
-              Start triage <span className="font-mono text-[11px] text-[#55555f]">↵</span>
-            </button>
-            <span className="font-mono text-[11px] text-dim">opens #{top.number}</span>
-          </div>
-        ) : (
-          <span className="font-mono text-[11px] text-dim">nothing waiting on a human</span>
-        )}
-      </div>
-    </section>
-  );
-}
+const LANE_LIMIT = 5;
 
-/* ------------------------------------------------------------------ triage waterfall */
-
-type Tone = "late" | "ai" | "plain" | "danger";
-const TONE: Record<Tone, string> = {
-  late: "text-warn",
-  ai: "text-accent-text",
-  plain: "text-fg-2",
-  danger: "text-danger",
-};
-
-function draftDetail(i: NeedItem) {
-  if (!i.draft) return i.kinds.includes("draft_ready") ? "draft ready" : "no draft yet";
-  const pct = Math.round(i.draft.confidence * 100);
-  return `draft · ${pct}%`;
-}
-
-function why(i: NeedItem): { reason: string; tone: Tone; detail: string } {
-  const k = i.kinds[0]!;
-  switch (k) {
-    case "approval": {
-      const title = i.approval?.title ?? "an action";
-      return {
-        reason: `approve ${title.charAt(0).toLowerCase()}${title.slice(1)}`,
-        tone: "ai",
-        detail: i.approval ? `trace asked ${since(i.approval.requestedAt)}` : "waiting for a decision",
-      };
-    }
-    case "sla_breached":
-      return {
-        reason:
-          ago(i.firstResponseDueAt) === "now"
-            ? "first reply just slipped"
-            : `first reply ${ago(i.firstResponseDueAt)} late`,
-        tone: "late",
-        detail: draftDetail(i),
-      };
-    case "sla_soon": {
-      const m = Math.max(1, Math.round((new Date(i.firstResponseDueAt!).getTime() - Date.now()) / 60_000));
-      return { reason: `first reply due in ${m}m`, tone: "late", detail: draftDetail(i) };
-    }
-    case "escalated":
-      return {
-        reason: "handed off by trace",
-        tone: "ai",
-        detail: [i.aiSentiment, i.aiIntent && humanize(i.aiIntent)].filter(Boolean).join(" · ") || "needs a human",
-      };
-    case "ai_error":
-      return { reason: "trace failed on this", tone: "danger", detail: "open it to retry" };
-    case "mine_waiting":
-      return { reason: "waiting on you", tone: "plain", detail: draftDetail(i) };
-    case "urgent_unassigned":
-      return { reason: `${i.priority}, nobody on it`, tone: "plain", detail: draftDetail(i) };
-    default: {
-      const pct = i.draft ? Math.round(i.draft.confidence * 100) : null;
-      const cites = i.draft?.sources ? ` · cites ${i.draft.sources}` : "";
-      return { reason: "draft ready", tone: "plain", detail: pct != null ? `${pct}%${cites}` : "review and send" };
-    }
-  }
-}
-
-type Filter = "all" | "sla" | "approvals" | "handed off" | "drafts" | "mine";
-const FILTER_KINDS: Record<Exclude<Filter, "all">, NeedKind[]> = {
-  sla: ["sla_breached", "sla_soon"],
-  approvals: ["approval"],
-  "handed off": ["escalated", "ai_error"],
-  drafts: ["draft_ready"],
-  mine: ["mine_waiting"],
-};
-
-function Triage({
-  data,
-  filter,
-  onFilter: setFilter,
-}: {
-  data: HomeData;
-  filter: Filter;
-  onFilter: (f: Filter) => void;
-}) {
+function LaneSection({ lane, items }: { lane: Lane; items: NeedItem[] }) {
+  const { boot } = useWorkspace();
   const [all, setAll] = React.useState(false);
-  const { items, total } = data.needs;
-  const match = (f: Filter) =>
-    f === "all" ? items : items.filter((i) => i.kinds.some((k) => FILTER_KINDS[f].includes(k)));
-  const shown = match(filter);
-  const visible = all ? shown : shown.slice(0, 7);
-  const filters: Filter[] = ["all", "sla", "approvals", "handed off", "drafts", "mine"];
+  const agent = boot.settings.ai.agentName;
+  const shown = all ? items : items.slice(0, LANE_LIMIT);
   return (
-    <section id="needs-you" className="flex scroll-mt-4 flex-col">
-      <div className="flex h-[50px] items-stretch gap-5 overflow-x-auto border-b border-line px-4 md:gap-8 md:pr-8 md:pl-10">
-        <h2 className="flex shrink-0 items-center font-mono text-[11px] font-medium tracking-[0.14em] whitespace-nowrap text-fg-2">
-          NEEDS YOU
-        </h2>
-        <div className="flex items-stretch gap-5" role="tablist">
-          {filters.map((f) => {
-            const n = f === "all" ? total : match(f).length;
-            const on = filter === f;
-            return (
-              <button
-                key={f}
-                role="tab"
-                aria-selected={on}
-                disabled={!n && f !== "all"}
-                onClick={() => {
-                  setFilter(f);
-                  setAll(false);
-                }}
-                className={cn(
-                  "-mb-px flex items-center gap-1.5 border-b font-mono text-[11px] whitespace-nowrap",
-                  on ? "border-fg text-fg" : "border-transparent text-dim enabled:hover:text-fg-2 disabled:opacity-60",
-                )}
-              >
-                {f}
-                <span className={on ? "text-fg-2" : undefined}>{n}</span>
-              </button>
-            );
-          })}
+    <section className="flex flex-col border-b border-line">
+      <header className="flex items-start gap-3 px-4 pt-6 pb-3 md:px-10">
+        <span className={cn("mt-[7px] size-2 shrink-0", toneDot[lane.tone])} aria-hidden />
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <h2 className="text-[14px] font-semibold text-fg">
+            {lane.title(agent)} <span className="ml-1 font-normal text-dim tabular-nums">{items.length}</span>
+          </h2>
+          <p className="text-[12.5px] text-muted">{lane.hint(agent)}</p>
         </div>
-      </div>
-      {!shown.length ? (
-        <p className="border-b border-line px-4 py-12 text-[13px] leading-relaxed text-body md:px-10">
-          Nothing here. Tickets show up the moment they're late, handed off or waiting on a decision.
-        </p>
-      ) : (
-        <>
-          <div className="flex h-8 items-center gap-8 border-b border-line-2 pr-8 pl-10 max-md:hidden">
-            <span className="flex-1 text-right font-mono text-[11px] text-dim">customer waiting since</span>
-            <span className="relative h-full shrink-0" style={{ width: TRACK }} aria-hidden>
-              {[24, 18, 12, 6, 0].map((h) => (
-                <span
-                  key={h}
-                  className="absolute top-1/2 font-mono text-[11px] text-dim"
-                  style={{
-                    left: TRACK * (1 - h / WINDOW_H),
-                    transform: `translate(${h === 24 ? "0" : h === 0 ? "-100%" : "-50%"}, -50%)`,
-                  }}
-                >
-                  {h ? `${h}h` : "now"}
-                </span>
-              ))}
-            </span>
-            <span className="w-[196px] shrink-0" />
-          </div>
-          <ol>
-            {visible.map((item, i) => (
-              <TriageRow key={item.ticketId} item={item} first={i === 0 && filter === "all"} />
-            ))}
-          </ol>
-        </>
-      )}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-line px-4 py-4 md:pr-8 md:pl-10">
-        {shown.length > 7 ? (
-          <button onClick={() => setAll(!all)} className="font-mono text-[11px] text-dim hover:text-fg">
-            {all ? "show fewer" : `+${shown.length - 7} more · show all ${shown.length}`}
-          </button>
-        ) : (
-          <span />
-        )}
-        <span className="flex items-center gap-4 font-mono text-[11px] text-dim">
-          <span className="flex items-center gap-1.5">
-            <span className="h-1 w-3.5 bg-white/[0.22]" /> waiting
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="h-1 w-3.5 bg-warn" /> past first-reply target
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="size-1.5 bg-accent" /> trace worked it
-          </span>
-        </span>
-      </div>
+      </header>
+      <ol className="flex flex-col pb-3">
+        {shown.map((i) => (
+          <NeedRow key={i.ticketId} item={i} lane={lane} />
+        ))}
+      </ol>
+      {items.length > LANE_LIMIT ? (
+        <button
+          onClick={() => setAll(!all)}
+          className="mb-4 self-start px-4 text-[12px] text-muted hover:text-fg md:px-10"
+        >
+          {all ? "Show fewer" : `Show ${items.length - LANE_LIMIT} more`}
+        </button>
+      ) : null}
     </section>
   );
 }
 
-function TriageRow({ item, first }: { item: NeedItem; first: boolean }) {
-  const { slug } = useWorkspace();
-  const w = why(item);
-  const start = xFor(item.waitingSince) ?? 0;
-  const dueIso =
-    item.firstResponseDueAt && new Date(item.firstResponseDueAt).getTime() < Date.now()
-      ? item.firstResponseDueAt
-      : null;
-  const late = item.kinds.includes("sla_breached") ? xFor(dueIso) : null;
-  const ai = xFor(item.aiAt);
-  const who = [
-    item.customerName ?? item.customerEmail ?? "unknown visitor",
-    item.channel,
-    item.priority === "high" || item.priority === "urgent" ? item.priority : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+/** What the AI already did on this ticket, in a few words. */
+function aiLine(i: NeedItem, agent: string): { text: string; tone: Tone } | null {
+  if (i.approval) return { text: `${agent} wants to: ${i.approval.title}`, tone: "accent" };
+  if (i.kinds.includes("ai_error")) return { text: `${agent} failed, open to retry`, tone: "danger" };
+  if (i.kinds.includes("escalated")) {
+    const why = [i.aiSentiment, i.aiIntent && humanize(i.aiIntent)].filter(Boolean).join(", ");
+    return { text: why ? `Handed off · ${why}` : "Handed off", tone: "warn" };
+  }
+  if (i.draft) return { text: `Draft ready · ${Math.round(i.draft.confidence * 100)}% confident`, tone: "accent" };
+  return null;
+}
+
+function waitLine(i: NeedItem): { text: string; tone: Tone } {
+  const waited = ago(i.waitingSince);
+  const due = i.firstResponseDueAt ? new Date(i.firstResponseDueAt).getTime() : null;
+  if (i.kinds.includes("sla_breached") && due) return { text: `Waiting ${waited} · overdue`, tone: "warn" };
+  if (i.kinds.includes("sla_soon") && due) {
+    const m = Math.max(1, Math.round((due - Date.now()) / 60_000));
+    return { text: `Reply due in ${m < 60 ? `${m}m` : `${Math.round(m / 60)}h`}`, tone: "warn" };
+  }
+  return { text: waited === "now" ? "Just arrived" : `Waiting ${waited}`, tone: "plain" };
+}
+
+function NeedRow({ item: i, lane }: { item: NeedItem; lane: Lane }) {
+  const { slug, boot } = useWorkspace();
+  const agent = boot.settings.ai.agentName;
+  const name = i.customerName ?? i.customerEmail ?? "Unknown visitor";
+  const wait = waitLine(i);
+  const ai = aiLine(i, agent);
+  const about = i.preview || i.aiSummary;
+  const high = i.priority === "high" || i.priority === "urgent";
   return (
     <li>
       <Link
         to="/w/$slug/inbox/$view/$ticket"
-        params={{ slug, view: "inbox", ticket: String(item.number) }}
-        className={cn(
-          "flex h-[68px] items-center gap-4 border-b border-line-2 px-4 hover:bg-white/[0.03] md:gap-8 md:pr-8 md:pl-10",
-          first && "bg-white/[0.025]",
-        )}
+        params={{ slug, view: "inbox", ticket: String(i.number) }}
+        className="group mx-2 flex items-start gap-3.5 px-2 py-3 hover:bg-white/[0.03] md:mx-8"
       >
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <Avatar name={name} size={32} tone="neutral" className="mt-0.5" />
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div className="flex min-w-0 items-baseline gap-2">
-            <span className="shrink-0 font-mono text-[11px] text-dim">#{item.number}</span>
-            <span className="truncate text-[13px] text-fg">{item.subject}</span>
+            <span className="truncate text-[13.5px] font-medium text-fg">{i.subject}</span>
+            {high ? (
+              <span
+                className={cn(
+                  "shrink-0 text-[11px] font-semibold tracking-wide uppercase",
+                  i.priority === "urgent" ? "text-danger" : "text-warn",
+                )}
+              >
+                {i.priority}
+              </span>
+            ) : null}
           </div>
-          <span className="truncate font-mono text-[11px] text-dim">{who}</span>
+          <span className="truncate text-[12px] text-muted">
+            {name}
+            {i.customerCompany ? ` · ${i.customerCompany}` : ""} · #{i.number} via {i.channel}
+            {i.assigneeName ? ` · ${i.assigneeName}` : ""}
+          </span>
+          {about ? <p className="line-clamp-1 text-[12.5px] leading-relaxed text-faint">“{about}”</p> : null}
+          <div className="flex flex-wrap gap-x-3 gap-y-1 pt-0.5 sm:hidden">
+            <StatusDot tone={wait.tone}>{wait.text}</StatusDot>
+            {ai ? <StatusDot tone={ai.tone}>{ai.text}</StatusDot> : null}
+          </div>
         </div>
-        <span className="relative h-full shrink-0 max-md:hidden" style={{ width: TRACK }} aria-hidden>
-          {[18, 12, 6].map((h) => (
-            <span
-              key={h}
-              className="absolute inset-y-0 w-px bg-white/[0.04]"
-              style={{ left: TRACK * (1 - h / WINDOW_H) }}
-            />
-          ))}
-          <span className="absolute top-1/2 h-1 -translate-y-1/2 bg-white/[0.22]" style={{ left: start, right: 0 }} />
-          {late != null ? (
-            <>
-              <span className="absolute top-1/2 h-1 -translate-y-1/2 bg-warn" style={{ left: late, right: 0 }} />
-              <span className="absolute top-1/2 h-[18px] w-px -translate-y-1/2 bg-warn" style={{ left: late }} />
-            </>
+        <div className="flex shrink-0 flex-col items-end gap-1.5 pt-0.5 max-sm:hidden">
+          <StatusDot tone={wait.tone}>{wait.text}</StatusDot>
+          {ai ? (
+            <StatusDot tone={ai.tone} className="max-w-[260px] truncate">
+              {ai.text}
+            </StatusDot>
           ) : null}
-          {ai != null ? (
-            <span
-              className="absolute top-1/2 size-1.5 -translate-y-1/2 bg-accent"
-              style={{ left: Math.min(ai, TRACK - 6) }}
-            />
-          ) : null}
+        </div>
+        <span className="flex w-[118px] shrink-0 items-center justify-end gap-1.5 self-center text-[12px] font-medium text-muted group-hover:text-fg max-md:hidden">
+          {lane.action(i)} <ArrowRight className="size-3.5" />
         </span>
-        <div className="flex w-[140px] shrink-0 flex-col items-end gap-1.5 text-right md:w-[196px]">
-          <span className={cn("max-w-full truncate font-mono text-[11.5px]", TONE[w.tone])}>{w.reason}</span>
-          <span className="max-w-full truncate font-mono text-[11px] text-dim">{w.detail}</span>
-        </div>
       </Link>
     </li>
+  );
+}
+
+function MoreInInbox({ n }: { n: number }) {
+  const { slug } = useWorkspace();
+  return (
+    <Link
+      to="/w/$slug/inbox/$view"
+      params={{ slug, view: "inbox" }}
+      className="px-4 py-4 text-[12.5px] text-muted hover:text-fg md:px-10"
+    >
+      {plural(n, "more ticket")} {n === 1 ? "needs" : "need"} you · open the inbox →
+    </Link>
+  );
+}
+
+function AllClear({ data }: { data: HomeData }) {
+  const { boot } = useWorkspace();
+  const t = data.pulse.tickets;
+  return (
+    <div className="flex flex-col items-start gap-3 px-4 py-12 md:px-10">
+      <CircleCheck className="size-5 text-ok" />
+      <p className="max-w-[520px] text-[13.5px] leading-relaxed text-body">
+        No approvals, late replies or hand-offs.{" "}
+        {t.resolvedByAi24h
+          ? `${boot.settings.ai.agentName} resolved ${plural(t.resolvedByAi24h, "ticket")} on its own in the last 24 hours.`
+          : "New conversations show up here the moment they need a person."}
+      </p>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ last 24 hours */
+
+function compactDuration(seconds: number) {
+  const m = Math.round(seconds / 60);
+  if (m < 1) return `${Math.round(seconds)}s`;
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  return h < 24 ? (m % 60 ? `${h}h ${m % 60}m` : `${h}h`) : `${Math.floor(h / 24)}d ${h % 24}h`;
+}
+
+function LastDay({ data }: { data: HomeData }) {
+  const { slug, boot } = useWorkspace();
+  const t = data.pulse.tickets;
+  const ai = data.pulse.ai;
+  const agent = boot.settings.ai.agentName;
+  const delta = t.new24h - t.newPrev24h;
+  const rows: { label: string; value: React.ReactNode; note?: string }[] = [
+    {
+      label: "New tickets",
+      value: t.new24h,
+      note: delta ? `${delta > 0 ? "+" : ""}${delta} vs the day before` : "same as the day before",
+    },
+    {
+      label: "Resolved",
+      value: t.resolved24h,
+      note: t.resolvedByAi24h ? `${t.resolvedByAi24h} by ${agent}` : undefined,
+    },
+    {
+      label: "First reply, median",
+      value:
+        data.pulse.medianFirstResponseSeconds != null ? compactDuration(data.pulse.medianFirstResponseSeconds) : "–",
+    },
+    { label: `Replies sent by ${agent}`, value: ai.autoReplies },
+    { label: "Waiting on customers", value: t.pending },
+  ];
+  return (
+    <aside className="flex flex-col border-t border-line xl:border-t-0">
+      <div className="flex items-center justify-between px-4 pt-6 pb-2 md:px-10 xl:px-6">
+        <h2 className="text-[13px] font-semibold text-fg-2">Last 24 hours</h2>
+        <Link to="/w/$slug/insights" params={{ slug }} className="text-[12px] text-muted hover:text-fg">
+          Insights →
+        </Link>
+      </div>
+      <dl className="grid grid-cols-2 px-4 pb-6 sm:grid-cols-3 md:px-10 xl:grid-cols-1 xl:px-6">
+        {rows.map((r) => (
+          <div key={r.label} className="flex flex-col gap-0.5 border-b border-line-2 py-3 last:border-b-0">
+            <dt className="text-[12px] text-muted">{r.label}</dt>
+            <dd className="flex items-baseline gap-2">
+              <span className="text-[18px] font-medium text-fg tabular-nums">{r.value}</span>
+              {r.note ? <span className="text-[11.5px] text-dim">{r.note}</span> : null}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      {ai.worked ? (
+        <p className="mx-4 mb-6 flex gap-2 border border-accent/20 bg-accent/[0.05] p-3 text-[12px] leading-relaxed text-body md:mx-10 xl:mx-6">
+          <Sparkles className="mt-0.5 size-3.5 shrink-0 text-accent-text" />
+          <span>
+            {agent} worked {plural(ai.worked, "ticket")}
+            {ai.drafted ? `, drafted ${plural(ai.drafted, "reply", "replies")}` : ""}
+            {ai.avgConfidence != null ? ` at ${Math.round(ai.avgConfidence * 100)}% confidence on average` : ""}.
+          </span>
+        </p>
+      ) : null}
+    </aside>
   );
 }
