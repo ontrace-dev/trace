@@ -24,7 +24,6 @@ import * as React from "react";
 import { toast } from "sonner";
 import {
   Avatar,
-  Badge,
   Button,
   Empty,
   Menu,
@@ -36,12 +35,13 @@ import {
   Spinner,
   Tip,
 } from "@/components/ui";
-import { channelIcon, priorityTone } from "./inbox";
+import { channelIcon } from "./inbox";
 import { ActionNote, TicketActionRuns } from "@/features/actions/ticket-runs";
 import { SourceChips } from "@/features/source-chips";
 import { Composer, type ComposerHandle } from "@/features/ticket/composer";
 import { ContextPanel } from "@/features/ticket/context-panel";
 import { CreateIssueDialog } from "@/features/issues/create-issue";
+import { AiPill, CHANNEL_LABEL, StatusPill } from "@/features/ticket/badges";
 import { useMarkRead } from "@/features/notifications";
 import { FactChips } from "@/features/issues/ticket-fields";
 import { TraceAnalysis, TraceWaterfall } from "@/features/ticket/trace-view";
@@ -122,23 +122,25 @@ function TicketView({ data }: { data: TicketDetail }) {
                   {ticket.subject}
                 </h1>
               </div>
-              <div className="flex items-center gap-2 font-mono text-[11px]">
-                <span className="shrink-0 whitespace-nowrap text-dim">{ref}</span>
-                <span className="h-[3px] w-[3px] rounded-full bg-[#5a5a66]" />
-                <span className="truncate text-muted">{customer?.email ?? customer?.name ?? "anonymous"}</span>
-                <span className="h-[3px] w-[3px] rounded-full bg-[#5a5a66]" />
-                <Badge tone={priorityTone(ticket.priority)} upper>
-                  {ticket.priority}
-                </Badge>
-                <span className="flex items-center gap-1 text-dim">
-                  <Channel className="size-3" /> {ticket.channel}
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px]">
+                <StatusPill t={ticket} />
+                <AiPill state={ticket.aiState} />
+                <span className="font-mono text-[12px] whitespace-nowrap text-muted">{ref}</span>
+                <span className="text-faint">·</span>
+                <span className="truncate text-fg-3">{customer?.name ?? customer?.email ?? "Unknown visitor"}</span>
+                <span className="text-faint">·</span>
+                <span className="flex items-center gap-1 text-muted">
+                  <Channel className="size-3" /> {CHANNEL_LABEL[ticket.channel] ?? ticket.channel}
                 </span>
-                {resolved ? (
-                  <Badge tone="ok" upper>
-                    {ticket.status}
-                  </Badge>
-                ) : ticket.status === "pending" ? (
-                  <Badge upper>pending</Badge>
+                {ticket.priority === "urgent" || ticket.priority === "high" ? (
+                  <>
+                    <span className="text-faint">·</span>
+                    <span
+                      className={ticket.priority === "urgent" ? "font-medium text-danger" : "font-medium text-warn"}
+                    >
+                      {ticket.priority === "urgent" ? "Urgent" : "High priority"}
+                    </span>
+                  </>
                 ) : null}
               </div>
             </div>
@@ -343,23 +345,23 @@ const OURS = "@2xl:ml-16";
 const THEIRS = "@2xl:mr-16";
 
 const ROLE = {
-  customer: { card: "border-line bg-white/[0.025]", rail: "", tag: "customer", tagTone: "text-dim" },
+  customer: { card: "border-line bg-white/[0.025]", rail: "", tag: "Customer", tagTone: "text-muted" },
   agent: {
     card: "border-line-strong bg-raised",
     rail: "border-l-2 border-l-info/70",
-    tag: "reply",
+    tag: "Reply",
     tagTone: "text-info",
   },
   ai: {
     card: "border-accent/25 bg-accent/[0.05]",
     rail: "border-l-2 border-l-accent",
-    tag: "ai reply",
+    tag: "AI reply",
     tagTone: "text-accent-text",
   },
   note: {
     card: "border-warn/25 bg-warn/[0.05]",
     rail: "border-l-2 border-l-warn/80",
-    tag: "internal note",
+    tag: "Internal note · team only",
     tagTone: "text-warn",
   },
 } as const;
@@ -398,9 +400,7 @@ function MessageItem({ m }: { m: Message }) {
           <Avatar name={name} size={24} tone={isCustomer ? "neutral" : "accent"} />
         )}
         <span className="text-[13px] font-semibold text-fg">{name}</span>
-        <span
-          className={cn("flex items-center gap-1 font-mono text-[10.5px] tracking-[0.1em] uppercase", role.tagTone)}
-        >
+        <span className={cn("flex items-center gap-1 text-[12px] font-medium", role.tagTone)}>
           {isNote ? <Lock className="size-2.5" /> : null}
           {role.tag}
         </span>
@@ -419,7 +419,7 @@ function MessageItem({ m }: { m: Message }) {
         </Tip>
       </header>
       <div
-        className={cn("prose-trace text-[13.5px] leading-[1.6]", isCustomer ? "text-fg-2" : "text-fg-3")}
+        className={cn("prose-trace text-[14px] leading-[1.6]", isCustomer ? "text-fg" : "text-fg-2")}
         dangerouslySetInnerHTML={{ __html: md(m.body) }}
       />
       {m.attachments.length ? (

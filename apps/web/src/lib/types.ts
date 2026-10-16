@@ -50,6 +50,8 @@ export interface TicketListItem {
   lastAuthorType: "customer" | "agent" | "ai" | "system" | null;
   /** A customer message you haven't opened yet. */
   unread: boolean;
+  /** Customer messages since you last opened it (and since anyone replied). */
+  unreadCount: number;
 }
 
 export interface Ticket {

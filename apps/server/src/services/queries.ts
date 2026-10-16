@@ -40,6 +40,18 @@ export function unreadFor(userId: string) {
   )`;
 }
 
+/** How many customer messages arrived since this teammate last opened the ticket and since anyone replied. */
+export function unreadCountFor(userId: string) {
+  return sql<number>`(
+    select count(*)::int from ${messages} m
+    where m.ticket_id = ${tickets.id} and m.kind = 'message' and m.author_type = 'customer'
+      and m.created_at > coalesce((select ${ticketReads.readAt} from ${ticketReads}
+            where ${ticketReads.ticketId} = ${tickets.id} and ${ticketReads.userId} = ${userId}), '-infinity')
+      and m.created_at > coalesce((select max(r.created_at) from ${messages} r
+            where r.ticket_id = ${tickets.id} and r.kind = 'message' and r.author_type in ('agent', 'ai')), '-infinity')
+  )`;
+}
+
 export async function markRead(userId: string, ticketId: string) {
   await db
     .insert(ticketReads)
@@ -120,6 +132,7 @@ export async function listTickets(
       /** Who wrote the latest public message: whose turn it is at a glance. */
       lastAuthorType: sql<"customer" | "agent" | "ai" | "system" | null>`(${lastMessage(messages.authorType)})`,
       unread: unreadFor(userId),
+      unreadCount: unreadCountFor(userId),
     })
     .from(tickets)
     .leftJoin(customers, eq(customers.id, tickets.customerId))

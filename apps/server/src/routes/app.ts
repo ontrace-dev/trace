@@ -69,6 +69,7 @@ import { listRuns } from "../services/actions/runs.ts";
 import { setFieldValue, ticketFieldValues } from "../services/fields.ts";
 import { ticketIssueLinks } from "../services/issues/index.ts";
 import { homeData, queuesOverview } from "../services/home.ts";
+import { overview } from "../services/overview.ts";
 import { discoverOidc } from "../services/sso.ts";
 import { type AppEnv, requireAdmin, requireUser, requireWorkspace } from "./middleware.ts";
 import { mask, publicSettings } from "./serializers.ts";
@@ -184,6 +185,9 @@ async function arrivalFor(e: BusEvent) {
 
 /** The landing page: what needs a human, what's spiking, what the AI did, every queue at a glance. */
 w.get("/home", async (c) => c.json(await homeData(c.get("orgId"), c.get("user").id)));
+
+/** Home: plain counts, the open tickets in the order to look at them, and what just happened. */
+w.get("/overview", async (c) => c.json(await overview(c.get("orgId"), c.get("user").id)));
 
 /** Every queue (built-in and saved views) with its live numbers. */
 w.get("/views/overview", async (c) => c.json({ queues: await queuesOverview(c.get("orgId"), c.get("user").id) }));

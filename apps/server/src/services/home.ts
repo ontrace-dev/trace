@@ -3,7 +3,7 @@ import { db } from "../db/index.ts";
 import { actionRuns, customers, drafts, messages, spans, tickets, user, views } from "../db/schema.ts";
 import { markdownToPlain } from "../lib/text.ts";
 import type { ViewFilters } from "../lib/types.ts";
-import { filtersToWhere, listTickets, type SystemView, systemViewFilters, unreadFor } from "./queries.ts";
+import { filtersToWhere, type SystemView, systemViewFilters } from "./queries.ts";
 
 /**
  * The landing page: what needs a human now, what's spiking, what the AI did, and how every queue looks.
@@ -155,8 +155,6 @@ export interface NeedItem {
   waitingSince: string;
   kinds: NeedKind[];
   approval: { runId: string; title: string; reason: string | null; requestedAt: string } | null;
-  /** A customer message this teammate hasn't seen yet. */
-  unread: boolean;
   score: number;
 }
 
@@ -195,7 +193,6 @@ async function needsYou(orgId: string, userId: string) {
         firstRespondedAt: tickets.firstRespondedAt,
         lastCustomerMessageAt: tickets.lastCustomerMessageAt,
         createdAt: tickets.createdAt,
-        unread: unreadFor(userId),
       })
       .from(tickets)
       .leftJoin(customers, eq(customers.id, tickets.customerId))
@@ -272,7 +269,6 @@ async function needsYou(orgId: string, userId: string) {
       approval: run
         ? { runId: run.id, title: run.title, reason: run.reason, requestedAt: run.createdAt.toISOString() }
         : null,
-      unread: !!t.unread,
       // Reason first; then priority, then how long the customer has waited (capped so old tickets don't drown news).
       score:
         WEIGHT[kinds[0]!] + (t.priority === "urgent" ? 15 : t.priority === "high" ? 8 : 0) + Math.min(ageHours, 48) / 8,
@@ -440,13 +436,11 @@ async function pulse(orgId: string) {
 }
 
 export async function homeData(orgId: string, userId: string) {
-  const [needs, hot, p, queues, fresh] = await Promise.all([
+  const [needs, hot, p, queues] = await Promise.all([
     needsYou(orgId, userId),
     hotTopics(orgId),
     pulse(orgId),
     queuesOverview(orgId, userId),
-    // New since you last looked: customer messages you haven't opened.
-    listTickets(orgId, { status: ["open", "pending"] }, userId, { limit: 8, unreadOnly: true }),
   ]);
-  return { needs, hot, pulse: p, queues, fresh };
+  return { needs, hot, pulse: p, queues };
 }

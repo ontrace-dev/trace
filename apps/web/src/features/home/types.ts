@@ -56,7 +56,6 @@ export interface NeedItem {
   waitingSince: string;
   kinds: NeedKind[];
   approval: { runId: string; title: string; reason: string | null; requestedAt: string } | null;
-  unread: boolean;
   score: number;
 }
 
@@ -98,11 +97,36 @@ export interface HomeData {
     medianFirstResponseSeconds: number | null;
   };
   queues: QueueRow[];
-  /** Unread conversations, newest first (at most 8). */
-  fresh: TicketListItem[];
 }
 
 export const homeKeys = {
   home: (wid: string) => ["home", wid] as const,
+  overview: (wid: string) => ["home", wid, "overview"] as const,
   views: (wid: string) => ["views-overview", wid] as const,
 };
+
+/** GET /overview — the Home page. */
+export interface Overview {
+  stats: {
+    unread: number;
+    open: number;
+    pending: number;
+    mine: number;
+    unassigned: number;
+    overdue: number;
+    drafts: number;
+    solved: number;
+    solvedByAi: number;
+  };
+  tickets: TicketListItem[];
+  activity: {
+    id: string;
+    at: string;
+    actor: "customer" | "team" | "ai" | "system";
+    who: string;
+    what: string;
+    number: number;
+    subject: string;
+    preview: string | null;
+  }[];
+}
